@@ -1,0 +1,125 @@
+package com.honortech.dataplatform.asset.service;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.honortech.dataplatform.asset.dto.CreateExternalAssetRequest;
+import com.honortech.dataplatform.asset.dto.DataAssetResponse;
+import com.honortech.dataplatform.asset.entity.DataAsset;
+import com.honortech.dataplatform.asset.mapper.DataAssetMapper;
+import com.honortech.dataplatform.common.enums.AssetSourceType;
+import com.honortech.dataplatform.common.enums.AssetType;
+import com.honortech.dataplatform.common.exception.BizException;
+import com.honortech.dataplatform.file.entity.DataFile;
+import com.honortech.dataplatform.file.mapper.DataFileMapper;
+import com.honortech.dataplatform.task.service.AcquisitionTaskService;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+@Service
+public class DataAssetServiceImpl implements DataAssetService {
+
+    private final DataAssetMapper dataAssetMapper;
+    private final AcquisitionTaskService acquisitionTaskService;
+    private final DataFileMapper dataFileMapper;
+
+    public DataAssetServiceImpl(
+            DataAssetMapper dataAssetMapper,
+            AcquisitionTaskService acquisitionTaskService,
+            DataFileMapper dataFileMapper) {
+        this.dataAssetMapper = dataAssetMapper;
+        this.acquisitionTaskService = acquisitionTaskService;
+        this.dataFileMapper = dataFileMapper;
+    }
+
+    @Override
+    @Transactional
+    public DataAsset createUploadedAsset(Long taskId, DataFile file, AssetType assetType) {
+        acquisitionTaskService.getTask(taskId);
+        DataAsset asset = new DataAsset();
+        asset.setTaskId(taskId);
+        asset.setSourceType(AssetSourceType.UPLOADED_FILE.name());
+        asset.setAssetType(assetType.name());
+        asset.setDisplayName(file.getOriginalFilename());
+        asset.setFileId(file.getId());
+        asset.setFileFormat(file.getFileExt());
+        asset.setCreatedAt(LocalDateTime.now());
+        dataAssetMapper.insert(asset);
+        return asset;
+    }
+
+    @Override
+    @Transactional
+    public DataAsset createExternalAsset(Long taskId, CreateExternalAssetRequest request) {
+        acquisitionTaskService.getTask(taskId);
+        AssetType assetType = AssetType.fromNullable(request.assetType());
+        if (request.externalPath() == null || request.externalPath().isBlank()) {
+            throw new BizException("externalPath must not be blank");
+        }
+        if (assetType == AssetType.RGB_SEQ_RAW && (request.description() == null || request.description().isBlank())) {
+            throw new BizException("description is required for RGB_SEQ_RAW external assets");
+        }
+
+        DataAsset asset = new DataAsset();
+        asset.setTaskId(taskId);
+        asset.setSourceType(AssetSourceType.EXTERNAL_PATH.name());
+        asset.setAssetType(assetType.name());
+        asset.setDisplayName(request.displayName());
+        asset.setExternalPath(request.externalPath());
+        asset.setFileFormat(request.fileFormat());
+        asset.setSizeRemark(request.sizeRemark());
+        asset.setDescription(request.description());
+        asset.setOperatorRemark(request.operatorRemark());
+        asset.setCreatedAt(LocalDateTime.now());
+        dataAssetMapper.insert(asset);
+        return asset;
+    }
+
+    @Override
+    public List<DataAsset> listByTaskId(Long taskId) {
+        acquisitionTaskService.getTask(taskId);
+        return dataAssetMapper.selectList(
+                new LambdaQueryWrapper<DataAsset>()
+                        .eq(DataAsset::getTaskId, taskId)
+                        .orderByDesc(DataAsset::getCreatedAt)
+        );
+    }
+
+    @Override
+    public List<DataAssetResponse> listAssetResponsesByTaskId(Long taskId) {
+        List<DataAsset> assets = listByTaskId(taskId);
+        Map<Long, DataFile> fileMap = new HashMap<>();
+        assets.stream()
+                .map(DataAsset::getFileId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .forEach(fileId -> fileMap.put(fileId, dataFileMapper.selectById(fileId)));
+
+        return assets.stream().map(asset -> {
+            DataFile file = asset.getFileId() == null ? null : fileMap.get(asset.getFileId());
+            return new DataAssetResponse(
+                    asset.getId(),
+                    asset.getTaskId(),
+                    asset.getSourceType(),
+                    asset.getAssetType(),
+                    asset.getDisplayName(),
+                    asset.getFileId(),
+                    file == null ? null : file.getOriginalFilename(),
+                    file == null ? null : file.getFileExt(),
+                    file == null ? null : file.getContentType(),
+                    file == null ? null : file.getFileSize(),
+                    file == null ? null : file.getUploadStatus(),
+                    asset.getExternalPath(),
+                    asset.getFileFormat(),
+                    asset.getSizeRemark(),
+                    asset.getDescription(),
+                    asset.getOperatorRemark(),
+                    asset.getCreatedAt()
+            );
+        }).toList();
+    }
+}

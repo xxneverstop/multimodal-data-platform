@@ -1,0 +1,32 @@
+# Workspace
+.claude/
+.vscode/
+.idea/
+
+# OS / logs / temp
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.temp
+
+# Environment files
+.env
+.env.local
+.env.*
+.env.*.local
+!.env.example
+!.env.*.example
+
+# Data and local runtime assets
+data/
+
+# Frontend
+mmdp-frontend/node_modules/
+mmdp-frontend/dist/
+mmdp-frontend/.vite/
+mmdp-frontend/.cache/
+
+# Backend
+mmdp-backend/target/
+mmdp-backend/.m2/

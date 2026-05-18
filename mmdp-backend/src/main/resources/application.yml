@@ -1,0 +1,30 @@
+server:
+  port: 19021
+
+spring:
+  application:
+    name: mmdp-backend
+  datasource:
+    url: ${MMDP_DB_URL:jdbc:mysql://localhost:3306/mmdp_db?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
+    username: ${MMDP_DB_USERNAME:root}
+    password: ${MMDP_DB_PASSWORD:change_me}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 200MB
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+minio:
+  endpoint: ${MMDP_MINIO_ENDPOINT:http://localhost:29010}
+  access-key: ${MMDP_MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MMDP_MINIO_SECRET_KEY:change_me}
+  bucket: ${MMDP_MINIO_BUCKET:mmdp-bucket}
