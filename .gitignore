@@ -22,7 +22,7 @@ Thumbs.db
 !.env.*.example
 
 # Data and local runtime assets
-data/
+/data/
 
 # Frontend
 mmdp-frontend/node_modules/
