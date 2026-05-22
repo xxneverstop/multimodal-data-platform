@@ -3,6 +3,9 @@
 .vscode/
 .idea/
 
+aiou/
+**/application.yaml
+
 # OS / logs / temp
 .DS_Store
 Thumbs.db
