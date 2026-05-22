@@ -3,15 +3,23 @@ package com.honortech.dataplatform.processing.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.honortech.dataplatform.asset.dto.CreateDerivedAssetRequest;
+import com.honortech.dataplatform.asset.dto.DataAssetResponse;
 import com.honortech.dataplatform.asset.entity.DataAsset;
 import com.honortech.dataplatform.asset.service.DataAssetService;
+import com.honortech.dataplatform.common.enums.AssetLineageRelationType;
 import com.honortech.dataplatform.common.enums.AssetType;
+import com.honortech.dataplatform.common.enums.ProcessingExecutorType;
 import com.honortech.dataplatform.common.enums.ProcessingJobStatus;
 import com.honortech.dataplatform.common.exception.BizException;
 import com.honortech.dataplatform.processing.PipelineIds;
+import com.honortech.dataplatform.processing.dto.CreateManualProcessingJobRequest;
 import com.honortech.dataplatform.processing.dto.CreateProcessingJobRequest;
+import com.honortech.dataplatform.processing.dto.ManualProcessingJobResponse;
 import com.honortech.dataplatform.processing.dto.ProcessingJobResponse;
+import com.honortech.dataplatform.processing.entity.AssetLineage;
 import com.honortech.dataplatform.processing.entity.ProcessingJob;
+import com.honortech.dataplatform.processing.mapper.AssetLineageMapper;
 import com.honortech.dataplatform.processing.mapper.ProcessingJobMapper;
 import com.honortech.dataplatform.task.service.AcquisitionTaskService;
 import org.springframework.stereotype.Service;
@@ -31,6 +39,7 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
     private final AcquisitionTaskService acquisitionTaskService;
     private final DataAssetService dataAssetService;
     private final ProcessingJobExecutor processingJobExecutor;
+    private final AssetLineageMapper assetLineageMapper;
     private final ObjectMapper objectMapper;
 
     public ProcessingJobServiceImpl(
@@ -38,11 +47,13 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
             AcquisitionTaskService acquisitionTaskService,
             DataAssetService dataAssetService,
             ProcessingJobExecutor processingJobExecutor,
+            AssetLineageMapper assetLineageMapper,
             ObjectMapper objectMapper) {
         this.processingJobMapper = processingJobMapper;
         this.acquisitionTaskService = acquisitionTaskService;
         this.dataAssetService = dataAssetService;
         this.processingJobExecutor = processingJobExecutor;
+        this.assetLineageMapper = assetLineageMapper;
         this.objectMapper = objectMapper;
     }
 
@@ -67,13 +78,67 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
         ProcessingJob job = new ProcessingJob();
         job.setTaskId(taskId);
         job.setPipelineId(request.pipelineId());
+        job.setExecutorType(ProcessingExecutorType.MOCK.name());
         job.setStatus(ProcessingJobStatus.CREATED.name());
         job.setParametersJson(writeJson(request.parameters()));
+        job.setParamsJson(writeJson(request.parameters()));
         job.setCreatedAt(LocalDateTime.now());
         job.setUpdatedAt(LocalDateTime.now());
         processingJobMapper.insert(job);
 
         return toResponse(processingJobExecutor.execute(job, assets));
+    }
+
+    @Override
+    @Transactional
+    public ManualProcessingJobResponse createManualJob(Long taskId, CreateManualProcessingJobRequest request) {
+        acquisitionTaskService.getTask(taskId);
+        validatePipelineId(request.pipelineId());
+        List<DataAsset> allAssets = dataAssetService.listByTaskId(taskId);
+        List<DataAsset> inputAssets = request.inputAssetIds().stream()
+                .distinct()
+                .map(assetId -> allAssets.stream()
+                        .filter(asset -> assetId.equals(asset.getId()))
+                        .findFirst()
+                        .orElseThrow(() -> new BizException("Input asset does not belong to task: " + assetId)))
+                .toList();
+
+        ProcessingJob job = new ProcessingJob();
+        job.setTaskId(taskId);
+        job.setPipelineId(request.pipelineId());
+        job.setExecutorType(ProcessingExecutorType.MANUAL.name());
+        job.setStatus(ProcessingJobStatus.SUCCESS.name());
+        job.setOperatorName(request.operatorName());
+        job.setToolName(request.toolName());
+        job.setToolVersion(request.toolVersion());
+        job.setParametersJson(writeJson(request.paramsJson()));
+        job.setParamsJson(writeJson(request.paramsJson()));
+        job.setLogPath(request.logPath());
+        job.setRemark(request.remark());
+        job.setCreatedAt(LocalDateTime.now());
+        job.setUpdatedAt(LocalDateTime.now());
+        processingJobMapper.insert(job);
+
+        List<DataAsset> outputAssets = request.outputAssets().stream()
+                .map(outputAsset -> createOutputAsset(taskId, job.getId(), outputAsset))
+                .toList();
+        for (DataAsset inputAsset : inputAssets) {
+            for (DataAsset outputAsset : outputAssets) {
+                AssetLineage lineage = new AssetLineage();
+                lineage.setTaskId(taskId);
+                lineage.setSourceAssetId(inputAsset.getId());
+                lineage.setTargetAssetId(outputAsset.getId());
+                lineage.setJobId(job.getId());
+                lineage.setRelationType(AssetLineageRelationType.JOB_INPUT_OUTPUT.name());
+                lineage.setCreatedAt(LocalDateTime.now());
+                assetLineageMapper.insert(lineage);
+            }
+        }
+
+        List<DataAssetResponse> createdAssets = dataAssetService.listAssetResponsesByTaskId(taskId).stream()
+                .filter(asset -> outputAssets.stream().anyMatch(created -> created.getId().equals(asset.id())))
+                .toList();
+        return new ManualProcessingJobResponse(toResponse(job), createdAssets);
     }
 
     @Override
@@ -102,13 +167,30 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
                 job.getId(),
                 job.getTaskId(),
                 job.getPipelineId(),
+                job.getExecutorType(),
                 job.getStatus(),
                 parseJson(job.getParametersJson()),
+                parseJson(job.getParamsJson()),
                 parseJson(job.getResultJson()),
                 job.getErrorMessage(),
+                job.getOperatorName(),
+                job.getToolName(),
+                job.getToolVersion(),
+                job.getLogPath(),
+                job.getRemark(),
                 job.getCreatedAt(),
                 job.getUpdatedAt()
         );
+    }
+
+    private void validatePipelineId(String pipelineId) {
+        if (!PipelineIds.RGB_MOCAP_ALIGNMENT.equals(pipelineId)) {
+            throw new BizException("Unsupported pipelineId: " + pipelineId);
+        }
+    }
+
+    private DataAsset createOutputAsset(Long taskId, Long jobId, CreateDerivedAssetRequest request) {
+        return dataAssetService.createDerivedAsset(taskId, jobId, request);
     }
 
     private String writeJson(JsonNode node) {

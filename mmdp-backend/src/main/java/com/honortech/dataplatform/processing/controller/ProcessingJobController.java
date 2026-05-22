@@ -1,9 +1,13 @@
 package com.honortech.dataplatform.processing.controller;
 
 import com.honortech.dataplatform.common.api.ApiResponse;
+import com.honortech.dataplatform.processing.dto.CreateManualProcessingJobRequest;
 import com.honortech.dataplatform.processing.dto.CreateProcessingJobRequest;
+import com.honortech.dataplatform.processing.dto.ManualProcessingJobResponse;
 import com.honortech.dataplatform.processing.dto.ProcessingJobResponse;
+import com.honortech.dataplatform.processing.dto.TaskLineageResponse;
 import com.honortech.dataplatform.processing.service.ProcessingJobService;
+import com.honortech.dataplatform.processing.service.TaskLineageService;
 import jakarta.validation.Valid;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,9 +24,11 @@ import java.util.List;
 public class ProcessingJobController {
 
     private final ProcessingJobService processingJobService;
+    private final TaskLineageService taskLineageService;
 
-    public ProcessingJobController(ProcessingJobService processingJobService) {
+    public ProcessingJobController(ProcessingJobService processingJobService, TaskLineageService taskLineageService) {
         this.processingJobService = processingJobService;
+        this.taskLineageService = taskLineageService;
     }
 
     @PostMapping("/api/tasks/{taskId}/processing-jobs")
@@ -32,9 +38,21 @@ public class ProcessingJobController {
         return ApiResponse.success("Processing job created", processingJobService.createJob(taskId, request));
     }
 
+    @PostMapping("/api/tasks/{taskId}/processing-jobs/manual")
+    public ApiResponse<ManualProcessingJobResponse> createManualJob(
+            @PathVariable Long taskId,
+            @Valid @RequestBody CreateManualProcessingJobRequest request) {
+        return ApiResponse.success("Manual processing job registered", processingJobService.createManualJob(taskId, request));
+    }
+
     @GetMapping("/api/tasks/{taskId}/processing-jobs")
     public ApiResponse<List<ProcessingJobResponse>> listJobs(@PathVariable Long taskId) {
         return ApiResponse.success(processingJobService.listJobsByTaskId(taskId));
+    }
+
+    @GetMapping("/api/tasks/{taskId}/lineage")
+    public ApiResponse<TaskLineageResponse> getTaskLineage(@PathVariable Long taskId) {
+        return ApiResponse.success(taskLineageService.getTaskLineage(taskId));
     }
 
     @GetMapping("/api/processing-jobs/{jobId}")

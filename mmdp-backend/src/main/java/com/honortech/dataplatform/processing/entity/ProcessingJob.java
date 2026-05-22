@@ -13,10 +13,17 @@ public class ProcessingJob {
     private Long id;
     private Long taskId;
     private String pipelineId;
+    private String executorType;
     private String status;
     private String parametersJson;
+    private String paramsJson;
     private String resultJson;
     private String errorMessage;
+    private String operatorName;
+    private String toolName;
+    private String toolVersion;
+    private String logPath;
+    private String remark;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -52,12 +59,28 @@ public class ProcessingJob {
         this.status = status;
     }
 
+    public String getExecutorType() {
+        return executorType;
+    }
+
+    public void setExecutorType(String executorType) {
+        this.executorType = executorType;
+    }
+
     public String getParametersJson() {
         return parametersJson;
     }
 
     public void setParametersJson(String parametersJson) {
         this.parametersJson = parametersJson;
+    }
+
+    public String getParamsJson() {
+        return paramsJson;
+    }
+
+    public void setParamsJson(String paramsJson) {
+        this.paramsJson = paramsJson;
     }
 
     public String getResultJson() {
@@ -74,6 +97,46 @@ public class ProcessingJob {
 
     public void setErrorMessage(String errorMessage) {
         this.errorMessage = errorMessage;
+    }
+
+    public String getOperatorName() {
+        return operatorName;
+    }
+
+    public void setOperatorName(String operatorName) {
+        this.operatorName = operatorName;
+    }
+
+    public String getToolName() {
+        return toolName;
+    }
+
+    public void setToolName(String toolName) {
+        this.toolName = toolName;
+    }
+
+    public String getToolVersion() {
+        return toolVersion;
+    }
+
+    public void setToolVersion(String toolVersion) {
+        this.toolVersion = toolVersion;
+    }
+
+    public String getLogPath() {
+        return logPath;
+    }
+
+    public void setLogPath(String logPath) {
+        this.logPath = logPath;
+    }
+
+    public String getRemark() {
+        return remark;
+    }
+
+    public void setRemark(String remark) {
+        this.remark = remark;
     }
 
     public LocalDateTime getCreatedAt() {

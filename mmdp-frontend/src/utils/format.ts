@@ -4,13 +4,14 @@ const STATUS_LABELS: Record<string, string> = {
   RUNNING: "处理中",
   UPLOADING: "上传中",
   READY: "已就绪",
+  REGISTERED: "已登记",
   MISSING_REQUIRED_ASSETS: "缺少必需资产",
   SUCCESS: "成功",
   FAILED: "失败",
   WARNING: "告警",
   PASSED: "通过",
   QC_PASSED: "质检通过",
-  QC_WARNING: "存在告警",
+  QC_WARNING: "质检告警",
   QC_FAILED: "质检失败"
 };
 
@@ -20,6 +21,7 @@ const STATUS_TONES: Record<string, string> = {
   RUNNING: "bg-sky-100 text-sky-700 ring-sky-200",
   UPLOADING: "bg-sky-100 text-sky-700 ring-sky-200",
   READY: "bg-emerald-100 text-emerald-700 ring-emerald-200",
+  REGISTERED: "bg-amber-100 text-amber-700 ring-amber-200",
   MISSING_REQUIRED_ASSETS: "bg-amber-100 text-amber-700 ring-amber-200",
   SUCCESS: "bg-emerald-100 text-emerald-700 ring-emerald-200",
   PASSED: "bg-emerald-100 text-emerald-700 ring-emerald-200",
@@ -71,12 +73,25 @@ export function formatStatusLabel(status?: string): string {
   if (!status) {
     return "-";
   }
-  return STATUS_LABELS[status] ?? status.split("_").join(" ");
+  return STATUS_LABELS[status] ?? status;
 }
 
 export function formatEnumLabel(value?: string): string {
   if (!value) {
     return "-";
   }
-  return value.split("_").join(" ");
+  return value;
+}
+
+export function formatSourceType(value?: string): string {
+  switch (value) {
+    case "upload":
+      return "手动上传";
+    case "acquisition_sync":
+      return "采集同步";
+    case "derived":
+      return "处理派生";
+    default:
+      return value || "-";
+  }
 }

@@ -1,36 +1,35 @@
 <template>
   <div class="space-y-5">
     <PageHeader
-      eyebrow="Task Center"
-      title="采集任务"
-      description="集中管理当前采集任务，查看任务状态、设备信息和后续文件处理入口。"
+      eyebrow="任务中心"
+      title="任务列表"
+      description="统一查看实验室采集任务，并进入任务详情页完成资产接入、处理记录、质量检查和数据链路追踪。"
       :meta="headerMeta"
     >
       <template #actions>
-        <BaseButton variant="primary" to="/tasks/new">新建采集任务</BaseButton>
+        <BaseButton variant="primary" to="/tasks/new">新建任务</BaseButton>
       </template>
     </PageHeader>
 
     <section class="grid gap-3 md:grid-cols-3">
-      <MetricCard label="任务总数" :value="taskPage.total || taskPage.records.length" description="当前环境内的任务记录总量" />
-      <MetricCard label="当前页记录" :value="taskPage.records.length" description="本次列表返回并展示的任务数" />
-      <MetricCard label="状态覆盖" :value="statusCoverage" description="用于确认任务状态是否已完整回写" />
+      <MetricCard label="任务总数" :value="taskPage.total || taskPage.records.length" description="当前环境中的任务记录总量" />
+      <MetricCard label="当前页记录" :value="taskPage.records.length" description="本次列表返回并展示的任务数量" />
+      <MetricCard label="状态覆盖" :value="statusCoverage" description="用于确认任务状态字段是否完整返回" />
     </section>
 
-    <PageCard eyebrow="Primary Panel" title="任务列表" description="列表展示任务名称、被试编号、设备类型、状态和创建时间，便于继续进入详情页处理文件。">
+    <PageCard eyebrow="任务入口" title="任务总览" description="任务详情页是当前阶段的主要工作区。新建任务后，可在详情页继续完成资产接入、处理记录、质量检查和数据链路追踪。">
       <DataTableShell>
         <template #toolbar>
-          <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_200px_auto]">
-            <div class="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-500">
-              <div class="font-medium uppercase tracking-[0.14em] text-slate-400">筛选区预留</div>
-              <div class="mt-1 leading-5">后续可接入任务状态、设备类型和日期筛选，当前先统一工具栏密度和布局结构。</div>
+          <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_210px_auto]">
+            <div class="rounded-[14px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              当前平台围绕“任务 -> 资产 -> 处理作业 -> 派生资产 -> 数据链路”组织。建议从任务详情页进入后续数据生命周期操作。
             </div>
-            <div class="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-500">
-              <div class="font-medium uppercase tracking-[0.14em] text-slate-400">Records</div>
+            <div class="rounded-[14px] border border-slate-200 bg-white px-4 py-3 text-xs text-slate-500">
+              <div class="font-medium tracking-[0.14em] text-slate-400">记录数量</div>
               <div class="mt-1 text-sm font-semibold text-slate-800">{{ taskPage.records.length }} / {{ taskPage.total || taskPage.records.length }}</div>
             </div>
             <div class="flex items-center justify-end">
-              <BaseButton to="/tasks/new">录入新任务</BaseButton>
+              <BaseButton variant="secondary" to="/tasks/new">录入新任务</BaseButton>
             </div>
           </div>
         </template>
@@ -39,16 +38,16 @@
         <EmptyState
           v-else-if="!taskPage.records.length"
           title="暂无采集任务"
-          description="当前还没有可展示的采集任务。可以先创建任务，再进入详情页上传原始文件并生成质检报告。"
+          description="当前还没有可展示的任务。可以先新建任务，再进入详情页完成资产接入与处理记录。"
           icon="任"
         />
         <table v-else class="min-w-full text-left text-sm">
-          <thead class="bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-500">
+          <thead class="bg-slate-50 text-xs tracking-[0.12em] text-slate-500">
             <tr>
               <th class="px-4 py-3 font-medium">任务信息</th>
               <th class="px-4 py-3 font-medium">被试编号</th>
               <th class="px-4 py-3 font-medium">动作 / 设备</th>
-              <th class="px-4 py-3 font-medium">状态</th>
+              <th class="px-4 py-3 font-medium">当前数据状态</th>
               <th class="px-4 py-3 font-medium">创建时间</th>
               <th class="px-4 py-3 font-medium text-right">操作</th>
             </tr>
@@ -69,7 +68,7 @@
               </td>
               <td class="px-4 py-3 text-slate-500">{{ formatDateTime(task.createdAt) }}</td>
               <td class="px-4 py-3 text-right">
-                <RouterLink :to="`/tasks/${task.id}`" class="font-medium text-slate-700 hover:text-slate-900">查看详情</RouterLink>
+                <RouterLink :to="`/tasks/${task.id}`" class="app-link font-medium">进入任务详情</RouterLink>
               </td>
             </tr>
           </tbody>
@@ -110,7 +109,7 @@ const taskPage = reactive<TaskPageResponse>({
 const headerMeta = computed(() => [
   { label: "当前页", value: taskPage.current },
   { label: "返回记录", value: taskPage.records.length },
-  { label: "总任务数", value: taskPage.total || taskPage.records.length }
+  { label: "任务总数", value: taskPage.total || taskPage.records.length }
 ]);
 
 const statusCoverage = computed(() => {

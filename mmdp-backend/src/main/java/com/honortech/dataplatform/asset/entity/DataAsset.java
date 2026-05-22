@@ -21,6 +21,7 @@ public class DataAsset {
     private String sizeRemark;
     private String description;
     private String operatorRemark;
+    private Long producedByJobId;
     private LocalDateTime createdAt;
 
     public Long getId() {
@@ -109,6 +110,14 @@ public class DataAsset {
 
     public void setOperatorRemark(String operatorRemark) {
         this.operatorRemark = operatorRemark;
+    }
+
+    public Long getProducedByJobId() {
+        return producedByJobId;
+    }
+
+    public void setProducedByJobId(Long producedByJobId) {
+        this.producedByJobId = producedByJobId;
     }
 
     public LocalDateTime getCreatedAt() {

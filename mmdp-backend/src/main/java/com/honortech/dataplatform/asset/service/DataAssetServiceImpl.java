@@ -2,6 +2,7 @@ package com.honortech.dataplatform.asset.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.honortech.dataplatform.asset.dto.CreateExternalAssetRequest;
+import com.honortech.dataplatform.asset.dto.CreateDerivedAssetRequest;
 import com.honortech.dataplatform.asset.dto.DataAssetResponse;
 import com.honortech.dataplatform.asset.entity.DataAsset;
 import com.honortech.dataplatform.asset.mapper.DataAssetMapper;
@@ -80,6 +81,32 @@ public class DataAssetServiceImpl implements DataAssetService {
     }
 
     @Override
+    @Transactional
+    public DataAsset createDerivedAsset(Long taskId, Long producedByJobId, CreateDerivedAssetRequest request) {
+        acquisitionTaskService.getTask(taskId);
+        AssetType assetType = AssetType.fromNullable(request.assetType());
+        AssetSourceType sourceType = AssetSourceType.valueOf(request.sourceType());
+        boolean hasFileId = request.fileId() != null;
+        boolean hasExternalPath = request.externalPath() != null && !request.externalPath().isBlank();
+        if (hasFileId == hasExternalPath) {
+            throw new BizException("Each output asset must provide exactly one of fileId or externalPath");
+        }
+
+        DataAsset asset = new DataAsset();
+        asset.setTaskId(taskId);
+        asset.setSourceType(sourceType.name());
+        asset.setAssetType(assetType.name());
+        asset.setDisplayName(request.assetName());
+        asset.setFileId(request.fileId());
+        asset.setExternalPath(request.externalPath());
+        asset.setDescription(request.description());
+        asset.setProducedByJobId(producedByJobId);
+        asset.setCreatedAt(LocalDateTime.now());
+        dataAssetMapper.insert(asset);
+        return asset;
+    }
+
+    @Override
     public List<DataAsset> listByTaskId(Long taskId) {
         acquisitionTaskService.getTask(taskId);
         return dataAssetMapper.selectList(
@@ -118,6 +145,7 @@ public class DataAssetServiceImpl implements DataAssetService {
                     asset.getSizeRemark(),
                     asset.getDescription(),
                     asset.getOperatorRemark(),
+                    asset.getProducedByJobId(),
                     asset.getCreatedAt()
             );
         }).toList();

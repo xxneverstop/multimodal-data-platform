@@ -9,6 +9,7 @@ public enum AssetType {
     RGB_VIDEO_MP4,
     MOCAP_CSV,
     SMPL_RESULT,
+    ALIGNED_RESULT,
     CAMERA_PARAM,
     OTHER;
 

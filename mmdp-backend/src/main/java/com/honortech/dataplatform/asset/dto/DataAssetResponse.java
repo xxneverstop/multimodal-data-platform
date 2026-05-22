@@ -19,6 +19,7 @@ public record DataAssetResponse(
         String sizeRemark,
         String description,
         String operatorRemark,
+        Long producedByJobId,
         LocalDateTime createdAt
 ) {
 }

@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS data_asset (
     size_remark VARCHAR(128) NULL,
     description VARCHAR(512) NULL,
     operator_remark VARCHAR(512) NULL,
+    produced_by_job_id BIGINT NULL,
     created_at DATETIME NOT NULL,
     CONSTRAINT fk_data_asset_task FOREIGN KEY (task_id) REFERENCES acquisition_task(id),
     CONSTRAINT fk_data_asset_file FOREIGN KEY (file_id) REFERENCES data_file(id)
@@ -64,13 +65,34 @@ CREATE TABLE IF NOT EXISTS processing_job (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     task_id BIGINT NOT NULL,
     pipeline_id VARCHAR(64) NOT NULL,
+    executor_type VARCHAR(32) NOT NULL,
     status VARCHAR(32) NOT NULL,
     parameters_json TEXT NULL,
+    params_json TEXT NULL,
     result_json TEXT NULL,
     error_message VARCHAR(512) NULL,
+    operator_name VARCHAR(128) NULL,
+    tool_name VARCHAR(128) NULL,
+    tool_version VARCHAR(64) NULL,
+    log_path VARCHAR(512) NULL,
+    remark VARCHAR(512) NULL,
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL,
     CONSTRAINT fk_processing_job_task FOREIGN KEY (task_id) REFERENCES acquisition_task(id)
+);
+
+CREATE TABLE IF NOT EXISTS asset_lineage (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    task_id BIGINT NOT NULL,
+    source_asset_id BIGINT NOT NULL,
+    target_asset_id BIGINT NOT NULL,
+    job_id BIGINT NOT NULL,
+    relation_type VARCHAR(64) NOT NULL,
+    created_at DATETIME NOT NULL,
+    CONSTRAINT fk_asset_lineage_task FOREIGN KEY (task_id) REFERENCES acquisition_task(id),
+    CONSTRAINT fk_asset_lineage_source_asset FOREIGN KEY (source_asset_id) REFERENCES data_asset(id),
+    CONSTRAINT fk_asset_lineage_target_asset FOREIGN KEY (target_asset_id) REFERENCES data_asset(id),
+    CONSTRAINT fk_asset_lineage_job FOREIGN KEY (job_id) REFERENCES processing_job(id)
 );
 
 -- Incremental migration SQL for existing databases:
@@ -89,6 +111,7 @@ CREATE TABLE IF NOT EXISTS processing_job (
 --     size_remark VARCHAR(128) NULL,
 --     description VARCHAR(512) NULL,
 --     operator_remark VARCHAR(512) NULL,
+--     produced_by_job_id BIGINT NULL,
 --     created_at DATETIME NOT NULL,
 --     CONSTRAINT fk_data_asset_task FOREIGN KEY (task_id) REFERENCES acquisition_task(id),
 --     CONSTRAINT fk_data_asset_file FOREIGN KEY (file_id) REFERENCES data_file(id)
@@ -97,11 +120,39 @@ CREATE TABLE IF NOT EXISTS processing_job (
 --     id BIGINT PRIMARY KEY AUTO_INCREMENT,
 --     task_id BIGINT NOT NULL,
 --     pipeline_id VARCHAR(64) NOT NULL,
+--     executor_type VARCHAR(32) NOT NULL,
 --     status VARCHAR(32) NOT NULL,
 --     parameters_json TEXT NULL,
+--     params_json TEXT NULL,
 --     result_json TEXT NULL,
 --     error_message VARCHAR(512) NULL,
+--     operator_name VARCHAR(128) NULL,
+--     tool_name VARCHAR(128) NULL,
+--     tool_version VARCHAR(64) NULL,
+--     log_path VARCHAR(512) NULL,
+--     remark VARCHAR(512) NULL,
 --     created_at DATETIME NOT NULL,
 --     updated_at DATETIME NOT NULL,
 --     CONSTRAINT fk_processing_job_task FOREIGN KEY (task_id) REFERENCES acquisition_task(id)
 -- );
+-- CREATE TABLE asset_lineage (
+--     id BIGINT PRIMARY KEY AUTO_INCREMENT,
+--     task_id BIGINT NOT NULL,
+--     source_asset_id BIGINT NOT NULL,
+--     target_asset_id BIGINT NOT NULL,
+--     job_id BIGINT NOT NULL,
+--     relation_type VARCHAR(64) NOT NULL,
+--     created_at DATETIME NOT NULL,
+--     CONSTRAINT fk_asset_lineage_task FOREIGN KEY (task_id) REFERENCES acquisition_task(id),
+--     CONSTRAINT fk_asset_lineage_source_asset FOREIGN KEY (source_asset_id) REFERENCES data_asset(id),
+--     CONSTRAINT fk_asset_lineage_target_asset FOREIGN KEY (target_asset_id) REFERENCES data_asset(id),
+--     CONSTRAINT fk_asset_lineage_job FOREIGN KEY (job_id) REFERENCES processing_job(id)
+-- );
+-- ALTER TABLE data_asset ADD COLUMN produced_by_job_id BIGINT NULL;
+-- ALTER TABLE processing_job ADD COLUMN executor_type VARCHAR(32) NOT NULL DEFAULT 'MOCK';
+-- ALTER TABLE processing_job ADD COLUMN params_json TEXT NULL;
+-- ALTER TABLE processing_job ADD COLUMN operator_name VARCHAR(128) NULL;
+-- ALTER TABLE processing_job ADD COLUMN tool_name VARCHAR(128) NULL;
+-- ALTER TABLE processing_job ADD COLUMN tool_version VARCHAR(64) NULL;
+-- ALTER TABLE processing_job ADD COLUMN log_path VARCHAR(512) NULL;
+-- ALTER TABLE processing_job ADD COLUMN remark VARCHAR(512) NULL;

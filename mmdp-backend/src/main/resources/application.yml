@@ -5,9 +5,9 @@ spring:
   application:
     name: mmdp-backend
   datasource:
-    url: ${MMDP_DB_URL:jdbc:mysql://localhost:3306/mmdp_db?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
-    username: ${MMDP_DB_USERNAME:root}
-    password: ${MMDP_DB_PASSWORD:change_me}
+    url: jdbc:mysql://100.120.105.120:13306/mmdp_db?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+    username: root
+    password: 123123
     driver-class-name: com.mysql.cj.jdbc.Driver
   servlet:
     multipart:
@@ -24,7 +24,7 @@ mybatis-plus:
       logic-not-delete-value: 0
 
 minio:
-  endpoint: ${MMDP_MINIO_ENDPOINT:http://localhost:29010}
-  access-key: ${MMDP_MINIO_ACCESS_KEY:minioadmin}
-  secret-key: ${MMDP_MINIO_SECRET_KEY:change_me}
-  bucket: ${MMDP_MINIO_BUCKET:mmdp-bucket}
+  endpoint: http://100.120.105.120:29010
+  access-key: admin
+  secret-key: 123123123
+  bucket: mmdp-test

@@ -5,6 +5,7 @@ export type AssetType =
   | "RGB_VIDEO_MP4"
   | "MOCAP_CSV"
   | "SMPL_RESULT"
+  | "ALIGNED_RESULT"
   | "CAMERA_PARAM"
   | "OTHER";
 
@@ -25,6 +26,7 @@ export interface DataAssetResponse {
   sizeRemark?: string | null;
   description?: string | null;
   operatorRemark?: string | null;
+  producedByJobId?: number | null;
   createdAt: string;
 }
 

@@ -1,29 +1,31 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-900: #0f172a;
-  --color-brand-800: #1e293b;
-  --color-brand-700: #334155;
-  --color-brand-600: #475569;
-  --color-surface-page: #f1f5f9;
+  --color-brand-50: #eef3fb;
+  --color-brand-100: #d9e5f5;
+  --color-brand-200: #b6cbe8;
+  --color-brand-500: #245bb8;
+  --color-brand-600: #1d4f9f;
+  --color-brand-700: #173f7f;
+  --color-surface-page: #f3f5f8;
   --color-surface-card: #ffffff;
   --color-surface-muted: #f8fafc;
-  --color-border-default: #e2e8f0;
-  --color-border-strong: #cbd5e1;
+  --color-border-soft: #e2e8f0;
+  --color-border-default: #cfd8e3;
   --color-text-900: #0f172a;
   --color-text-700: #334155;
   --color-text-500: #64748b;
   --color-success-100: #dcfce7;
   --color-success-700: #166534;
-  --color-warning-100: #fef3c7;
-  --color-warning-700: #92400e;
+  --color-warning-100: #fff4db;
+  --color-warning-700: #b45309;
   --color-danger-100: #fee2e2;
   --color-danger-700: #b91c1c;
-  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.06);
-  --shadow-header: 0 1px 3px rgba(15, 23, 42, 0.08);
-  --radius-small: 10px;
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.03), 0 8px 24px rgba(15, 23, 42, 0.04);
+  --shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.03), 0 4px 10px rgba(15, 23, 42, 0.04);
+  --radius-small: 8px;
   --radius-medium: 12px;
-  --radius-large: 16px;
+  --radius-large: 14px;
 }
 
 @layer base {
@@ -72,14 +74,9 @@
 }
 
 @layer components {
-  .app-shell-panel {
-    border: 1px solid var(--color-border-default);
-    background: var(--color-surface-card);
-    box-shadow: var(--shadow-card);
-  }
-
+  .app-shell-panel,
   .app-section-card {
-    border: 1px solid var(--color-border-default);
+    border: 1px solid var(--color-border-soft);
     background: var(--color-surface-card);
     box-shadow: var(--shadow-card);
   }
@@ -87,9 +84,9 @@
   .app-input {
     width: 100%;
     border-radius: var(--radius-small);
-    border: 1px solid var(--color-border-strong);
+    border: 1px solid var(--color-border-default);
     background: var(--color-surface-card);
-    padding: 0.875rem 1rem;
+    padding: 0.8rem 0.95rem;
     color: var(--color-text-900);
     outline: none;
     transition:
@@ -98,31 +95,82 @@
       background-color 0.2s ease;
   }
 
+  .app-input-compact {
+    min-height: 2.25rem;
+    padding: 0.45rem 0.7rem;
+    font-size: 0.875rem;
+  }
+
   .app-input::placeholder {
     color: var(--color-text-500);
   }
 
   .app-input:hover {
-    border-color: #94a3b8;
+    border-color: #b8c4d3;
   }
 
   .app-input:focus {
-    border-color: #64748b;
-    box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.18);
+    border-color: var(--color-brand-500);
+    box-shadow: 0 0 0 3px rgba(36, 91, 184, 0.12);
   }
 
-  .app-upload-zone {
-    border: 1px dashed #94a3b8;
-    background: var(--color-surface-muted);
+  .app-link {
+    color: var(--color-brand-600);
+    transition: color 0.2s ease;
+  }
+
+  .app-link:hover {
+    color: var(--color-brand-700);
+  }
+
+  .app-button {
+    display: inline-flex;
+    width: auto;
+    min-width: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    white-space: nowrap;
+    border-radius: 8px;
+    border-width: 1px;
+    font-weight: 500;
+    line-height: 1;
     transition:
-      border-color 0.2s ease,
       background-color 0.2s ease,
+      border-color 0.2s ease,
+      color 0.2s ease,
       box-shadow 0.2s ease;
   }
 
-  .app-upload-zone:hover {
-    border-color: #475569;
+  .app-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .nav-rail-button {
+    display: inline-flex;
+    height: 40px;
+    width: 40px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    color: var(--color-text-500);
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease,
+      border-color 0.2s ease;
+  }
+
+  .nav-rail-button:hover {
     background: #f8fafc;
-    box-shadow: inset 0 0 0 1px rgba(71, 85, 105, 0.08);
+    border-color: var(--color-border-soft);
+    color: var(--color-text-900);
+  }
+
+  .nav-rail-button-active {
+    background: var(--color-brand-50);
+    border-color: var(--color-brand-200);
+    color: var(--color-brand-700);
   }
 }
