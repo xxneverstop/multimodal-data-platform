@@ -35,7 +35,7 @@ export interface AssetListItem {
   assetType: string;
   modality: string;
   fileFormat: string;
-  sourceType: "upload" | "acquisition_sync" | "derived";
+  sourceType: "upload" | "acquisition_sync" | "derived" | "external_register";
   annotationStatus: string;
   annotationTag: string;
   qcStatus: string;
@@ -134,12 +134,39 @@ export interface FinalAssetRecord {
   updatedAt: string;
 }
 
+export interface OverviewDistributionItem {
+  label: string;
+  value: number;
+  color: string;
+}
+
+export interface OverviewTrendSeries {
+  label: string;
+  color: string;
+  values: number[];
+}
+
+export interface OverviewTrendChart {
+  labels: string[];
+  series: OverviewTrendSeries[];
+}
+
 export interface PlatformOverview {
   taskCount: number;
   sessionCount: number;
   assetCount: number;
   processingCount: number;
   qcPassRate: string;
+  totalDuration: string;
+  finalAssetCount: number;
+  modalityDistribution: OverviewDistributionItem[];
+  sourceDistribution: OverviewDistributionItem[];
+  processingStatusDistribution: OverviewDistributionItem[];
+  qcResultDistribution: OverviewDistributionItem[];
+  assetGrowthTrend30d: OverviewTrendChart;
+  sessionGrowthTrend30d: OverviewTrendChart;
+  processingTrend30d: OverviewTrendChart;
+  qcTrend30d: OverviewTrendChart;
   recentSessions: SessionRecord[];
   recentAssets: AssetListItem[];
   recentJobs: ProcessingJobResponse[];

@@ -277,6 +277,40 @@
       <path d="m20 20-3.5-3.5" />
     </svg>
     <svg
+      v-else-if="name === 'refresh-cw'"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class="h-full w-full"
+    >
+      <path d="M21 12a9 9 0 0 1-15.4 6.4" />
+      <path d="M3 12A9 9 0 0 1 18.4 5.6" />
+      <path d="M3 17v-4h4" />
+      <path d="M21 7v4h-4" />
+    </svg>
+    <svg
+      v-else-if="name === 'maximize'"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class="h-full w-full"
+    >
+      <path d="M8 3H3v5" />
+      <path d="M16 3h5v5" />
+      <path d="M21 16v5h-5" />
+      <path d="M8 21H3v-5" />
+      <path d="m3 8 6-6" />
+      <path d="m21 8-6-6" />
+      <path d="m3 16 6 6" />
+      <path d="m21 16-6 6" />
+    </svg>
+    <svg
       v-else-if="name === 'plus'"
       viewBox="0 0 24 24"
       fill="none"

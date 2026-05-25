@@ -5,6 +5,7 @@
 
 aiou/
 **/application.yaml
+**/application.yml
 
 # OS / logs / temp
 .DS_Store

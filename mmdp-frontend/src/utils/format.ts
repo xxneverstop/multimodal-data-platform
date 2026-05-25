@@ -90,7 +90,9 @@ export function formatSourceType(value?: string): string {
     case "acquisition_sync":
       return "采集同步";
     case "derived":
-      return "处理派生";
+      return "派生结果";
+    case "external_register":
+      return "外部登记";
     default:
       return value || "-";
   }
