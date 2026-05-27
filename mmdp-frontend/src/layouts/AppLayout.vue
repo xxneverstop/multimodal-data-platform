@@ -126,10 +126,12 @@ const functionItems = [
   { label: "数据", to: "/data" },
   { label: "上传", to: "/upload" },
   { label: "采集", to: "/acquisition" },
+  { label: "会话", to: "/sessions" },
   { label: "处理", to: "/processing" },
   { label: "标注", to: "/annotation" },
   { label: "质检", to: "/qc" },
-  { label: "导出", to: "/export" }
+  { label: "导出", to: "/export" },
+  { label: "原型", to: "/collector" }
 ];
 
 const managementItems = [

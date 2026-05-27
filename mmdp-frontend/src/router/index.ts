@@ -4,6 +4,12 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
+      path: "/play/:sessionId",
+      name: "session-playback",
+      component: () => import("@/views/playback/PlaybackView.vue"),
+      meta: { title: "数据播放", fullscreen: true }
+    },
+    {
       path: "/",
       component: () => import("@/layouts/AppLayout.vue"),
       children: [
@@ -85,6 +91,12 @@ const router = createRouter({
           name: "export",
           component: () => import("@/views/export/FinalAssetView.vue"),
           meta: { title: "成品资产", description: "Final Asset 视图，聚焦可交付数据资产，而非单纯下载列表。" }
+        },
+        {
+          path: "collector",
+          name: "collector-prototype",
+          component: () => import("@/views/collector/CollectorPrototypeView.vue"),
+          meta: { title: "采集原型", description: "Collector 原型页面，使用 mock 数据验证三路采集与实时面板链路。" }
         },
         {
           path: "management/:module",

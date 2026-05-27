@@ -105,7 +105,8 @@ class ProcessingJobServiceImplTest {
         when(dataAssetService.listAssetResponsesByTaskId(1L)).thenReturn(List.of(
                 new com.honortech.dataplatform.asset.dto.DataAssetResponse(
                         21L, 1L, "EXTERNAL_PATH", "ALIGNED_RESULT", "aligned", null, null, null, null, null, null,
-                        "\\\\nas\\aligned", null, null, "aligned output", null, 99L, LocalDateTime.now()
+                        "\\\\nas\\aligned", null, null, "aligned output", null, 99L, LocalDateTime.now(),
+                        null, null
                 )
         ));
 

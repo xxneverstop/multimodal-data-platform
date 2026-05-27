@@ -31,6 +31,9 @@ mmdp-frontend/dist/
 mmdp-frontend/.vite/
 mmdp-frontend/.cache/
 
+# ML models
+freestyle/
+
 # Backend
 mmdp-backend/target/
 mmdp-backend/.m2/

@@ -10,7 +10,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
         "com.honortech.dataplatform.file.mapper",
         "com.honortech.dataplatform.qc.mapper",
         "com.honortech.dataplatform.asset.mapper",
-        "com.honortech.dataplatform.processing.mapper"
+        "com.honortech.dataplatform.processing.mapper",
+        "com.honortech.dataplatform.session.mapper"
 })
 public class MmdpBackendApplication {
 

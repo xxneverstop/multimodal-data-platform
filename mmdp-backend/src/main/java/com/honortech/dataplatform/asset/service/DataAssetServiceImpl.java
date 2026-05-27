@@ -146,7 +146,9 @@ public class DataAssetServiceImpl implements DataAssetService {
                     asset.getDescription(),
                     asset.getOperatorRemark(),
                     asset.getProducedByJobId(),
-                    asset.getCreatedAt()
+                    asset.getCreatedAt(),
+                    file == null ? null : file.getObjectKey(),
+                    file == null ? null : file.getStorageUrl()
             );
         }).toList();
     }

@@ -54,7 +54,7 @@
               <td class="px-3 py-2.5 text-right">
                 <div class="flex justify-end gap-2">
                   <BaseButton size="sm" variant="ghost" :to="`/data/${asset.id}?taskId=${asset.taskId}`">详情</BaseButton>
-                  <BaseButton size="sm" variant="ghost" :to="`/data/${asset.id}?taskId=${asset.taskId}`">
+                  <BaseButton size="sm" variant="ghost" :to="`/play/${asset.sessionId}`">
                     <BaseIcon name="play" size="sm" />
                     播放
                   </BaseButton>

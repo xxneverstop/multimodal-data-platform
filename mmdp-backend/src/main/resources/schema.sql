@@ -16,6 +16,22 @@ CREATE TABLE IF NOT EXISTS acquisition_task (
     deleted TINYINT NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS collection_session (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    task_id BIGINT NOT NULL,
+    session_id VARCHAR(64) NOT NULL,
+    subject_code VARCHAR(64) NOT NULL,
+    action_name VARCHAR(128) NOT NULL,
+    started_at DATETIME NOT NULL,
+    ended_at DATETIME NULL,
+    duration_ms BIGINT NULL,
+    manifest_json TEXT NOT NULL,
+    upload_status VARCHAR(32) NOT NULL DEFAULT 'UPLOADED',
+    created_at DATETIME NOT NULL,
+    CONSTRAINT fk_session_task FOREIGN KEY (task_id) REFERENCES acquisition_task(id),
+    UNIQUE INDEX idx_session_id (session_id)
+);
+
 CREATE TABLE IF NOT EXISTS data_file (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     task_id BIGINT NOT NULL,

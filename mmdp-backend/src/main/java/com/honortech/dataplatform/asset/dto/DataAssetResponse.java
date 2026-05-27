@@ -20,6 +20,8 @@ public record DataAssetResponse(
         String description,
         String operatorRemark,
         Long producedByJobId,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        String objectKey,
+        String storageUrl
 ) {
 }
