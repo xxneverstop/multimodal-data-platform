@@ -113,7 +113,7 @@ Storage:
 本地文件 + JSON Manifest
 
 Platform:
-Spring Boot + MySQL + MinIO
+Spring Boot + MySQL + OSS
 ```
 
 采集过程中，系统优先本地落盘，而非边采边上传。原因是视频与多模态数据量较大，实时上传会影响采集稳定性。因此流程设计为：

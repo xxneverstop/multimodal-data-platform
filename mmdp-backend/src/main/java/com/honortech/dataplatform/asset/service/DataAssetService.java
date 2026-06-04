@@ -13,6 +13,12 @@ public interface DataAssetService {
 
     DataAsset createUploadedAsset(Long taskId, DataFile file, AssetType assetType);
 
+    DataAsset findByFileId(Long fileId);
+
+    DataAsset createUploadedAssetIfAbsent(Long taskId, DataFile file, AssetType assetType);
+
+    DataAsset createAcquisitionAsset(Long taskId, Long sessionId, String sourceKey, DataFile file, AssetType assetType);
+
     DataAsset createExternalAsset(Long taskId, CreateExternalAssetRequest request);
 
     DataAsset createDerivedAsset(Long taskId, Long producedByJobId, CreateDerivedAssetRequest request);

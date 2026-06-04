@@ -19,6 +19,7 @@ export interface StructuredQcReport {
 export interface QcReportResponse {
   id: number;
   taskId: number;
+  sessionId?: number | null;
   fileId: number;
   qcStatus: string;
   summary: string;

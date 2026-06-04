@@ -94,7 +94,7 @@ const config = {
     dialogTitle: "新建存储",
     fieldLabel: "存储名称",
     cards: [
-      { label: "存储源", value: "MinIO / OSS / COS", description: "统一配置入口" },
+      { label: "存储源", value: "OSS", description: "统一配置入口" },
       { label: "当前目标", value: "配置台账", description: "先保留结构" }
     ]
   },

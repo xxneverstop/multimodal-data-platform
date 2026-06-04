@@ -1,23 +1,29 @@
 package com.honortech.dataplatform.file.controller;
 
 import com.honortech.dataplatform.common.api.ApiResponse;
-import com.honortech.dataplatform.common.util.MinioStorageClient;
+import com.honortech.dataplatform.common.storage.StorageProvider;
+import com.honortech.dataplatform.common.storage.StorageRouter;
+import com.honortech.dataplatform.file.dto.CompleteDirectUploadRequest;
 import com.honortech.dataplatform.file.dto.DataFileResponse;
 import com.honortech.dataplatform.file.dto.FileUploadResponse;
+import com.honortech.dataplatform.file.dto.InitiateDirectUploadRequest;
+import com.honortech.dataplatform.file.dto.InitiateDirectUploadResponse;
 import com.honortech.dataplatform.file.entity.DataFile;
 import com.honortech.dataplatform.file.service.DataFileService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -26,79 +32,81 @@ import java.util.List;
 @RestController
 public class DataFileController {
 
-    private final DataFileService dataFileService;
-    private final MinioStorageClient minioStorageClient;
+    private static final Logger log = LoggerFactory.getLogger(DataFileController.class);
 
-    public DataFileController(DataFileService dataFileService, MinioStorageClient minioStorageClient) {
+    private final DataFileService dataFileService;
+    private final StorageRouter storageRouter;
+
+    public DataFileController(DataFileService dataFileService, StorageRouter storageRouter) {
         this.dataFileService = dataFileService;
-        this.minioStorageClient = minioStorageClient;
+        this.storageRouter = storageRouter;
     }
 
     @PostMapping("/api/tasks/{taskId}/files")
-    public ApiResponse<FileUploadResponse> uploadTaskFile(
+    public ApiResponse<FileUploadResponse> uploadTaskFiles(
             @PathVariable Long taskId,
-            @RequestPart("file") MultipartFile file,
+            @RequestPart(value = "files", required = false) List<MultipartFile> files,
+            @RequestPart(value = "archive", required = false) MultipartFile archive,
+            @RequestParam(value = "sessionId", required = false) Long sessionId,
             @RequestPart(value = "assetType", required = false) String multipartAssetType,
-            @RequestParam(value = "assetType", required = false) String requestAssetType) {
-        String assetType = multipartAssetType;
-        if (assetType == null || assetType.isBlank()) {
-            assetType = requestAssetType;
+            @RequestParam(value = "assetType", required = false) String requestAssetType,
+            HttpServletRequest request) {
+        MultipartFile singleFile = getPartFile(request, "file");
+        if (singleFile != null && !singleFile.isEmpty()
+                && (files == null || files.isEmpty())
+                && (archive == null || archive.isEmpty())) {
+            String assetType = multipartAssetType != null && !multipartAssetType.isBlank()
+                    ? multipartAssetType
+                    : requestAssetType;
+            return ApiResponse.success("File uploaded", dataFileService.uploadTaskFile(taskId, singleFile, assetType));
         }
-        return ApiResponse.success("File uploaded", dataFileService.uploadTaskFile(taskId, file, assetType));
+        List<MultipartFile> effectiveFiles = files;
+        if ((files == null || files.isEmpty()) && singleFile != null && !singleFile.isEmpty()) {
+            effectiveFiles = List.of(singleFile);
+        }
+        FileUploadResponse response = dataFileService.uploadTaskFiles(taskId, sessionId, effectiveFiles, archive);
+        return ApiResponse.success(response.fileCount() + " file(s) uploaded", response);
+    }
+
+    @PostMapping("/api/tasks/{taskId}/files/initiate")
+    public ApiResponse<InitiateDirectUploadResponse> initiateDirectUpload(
+            @PathVariable Long taskId,
+            @Valid @RequestBody InitiateDirectUploadRequest request) {
+        return ApiResponse.success("Direct upload initiated", dataFileService.initiateDirectUpload(taskId, request));
+    }
+
+    @PostMapping("/api/files/{fileId}/complete")
+    public ApiResponse<DataFileResponse> completeDirectUpload(
+            @PathVariable Long fileId,
+            @Valid @RequestBody CompleteDirectUploadRequest request) {
+        if (!fileId.equals(request.fileId())) {
+            throw new IllegalArgumentException("Path fileId does not match request body fileId");
+        }
+        return ApiResponse.success("Direct upload completed", dataFileService.completeDirectUpload(request));
     }
 
     @GetMapping("/api/files/{fileId}")
     public ApiResponse<DataFileResponse> getFile(@PathVariable Long fileId) {
         DataFile file = dataFileService.getFile(fileId);
-        return ApiResponse.success(new DataFileResponse(
-                file.getId(),
-                file.getTaskId(),
-                file.getOriginalFilename(),
-                file.getFileExt(),
-                file.getContentType(),
-                file.getFileSize(),
-                file.getBucketName(),
-                file.getObjectKey(),
-                file.getStorageUrl(),
-                file.getUploadStatus(),
-                file.getCreatedAt()
-        ));
+        return ApiResponse.success(toResponse(file));
     }
 
     @GetMapping("/api/tasks/{taskId}/files")
     public ApiResponse<List<DataFileResponse>> listTaskFiles(@PathVariable Long taskId) {
-        return ApiResponse.success(
-                dataFileService.listFilesByTaskId(taskId)
-                        .stream()
-                        .map(file -> new DataFileResponse(
-                                file.getId(),
-                                file.getTaskId(),
-                                file.getOriginalFilename(),
-                                file.getFileExt(),
-                                file.getContentType(),
-                                file.getFileSize(),
-                                file.getBucketName(),
-                                file.getObjectKey(),
-                                file.getStorageUrl(),
-                                file.getUploadStatus(),
-                                file.getCreatedAt()
-                        ))
-                        .toList()
-        );
+        return ApiResponse.success(dataFileService.listFilesByTaskId(taskId).stream().map(this::toResponse).toList());
     }
-
-    private static final Logger log = LoggerFactory.getLogger(DataFileController.class);
 
     @GetMapping("/api/files/{fileId}/download")
     public void downloadFile(@PathVariable Long fileId, HttpServletResponse response) {
         DataFile file = dataFileService.getFile(fileId);
-        long size = minioStorageClient.getObjectSize(file.getObjectKey());
+        StorageProvider provider = StorageProvider.fromValue(file.getStorageProvider());
+        long size = storageRouter.get(provider).getObjectSize(file.getBucketName(), file.getObjectKey());
         response.setContentType(file.getContentType());
         response.setContentLengthLong(size);
         response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + file.getOriginalFilename() + "\"");
         response.setHeader(HttpHeaders.ACCEPT_RANGES, "bytes");
 
-        try (InputStream in = minioStorageClient.download(file.getObjectKey());
+        try (InputStream in = storageRouter.get(provider).download(file.getBucketName(), file.getObjectKey());
              OutputStream out = response.getOutputStream()) {
             byte[] buf = new byte[8192];
             int n;
@@ -113,6 +121,40 @@ public class DataFileController {
                 throw new RuntimeException("Failed to stream file", e);
             }
         }
+    }
+
+    private MultipartFile getPartFile(HttpServletRequest request, String name) {
+        try {
+            if (!(request instanceof org.springframework.web.multipart.MultipartHttpServletRequest mpRequest)) {
+                return null;
+            }
+            return mpRequest.getFile(name);
+        } catch (Exception exception) {
+            return null;
+        }
+    }
+
+    private DataFileResponse toResponse(DataFile file) {
+        return new DataFileResponse(
+                file.getId(),
+                file.getTaskId(),
+                file.getSessionId(),
+                file.getFileRole(),
+                file.getSourceKey(),
+                file.getOriginalFilename(),
+                file.getRelativePath(),
+                file.getFileExt(),
+                file.getContentType(),
+                file.getFileSize(),
+                file.getSha256(),
+                file.getAssetType(),
+                file.getStorageProvider(),
+                file.getBucketName(),
+                file.getObjectKey(),
+                file.getStorageUrl(),
+                file.getUploadStatus(),
+                file.getCreatedAt()
+        );
     }
 
     private boolean isClientAbort(Throwable e) {

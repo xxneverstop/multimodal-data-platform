@@ -2,7 +2,7 @@
 
 This backend implements the first MVP loop:
 
-`create task -> upload file to MinIO -> persist data_file -> run basic QC -> persist qc_report -> update task status -> query report`
+`create task -> upload file to OSS -> persist data_file -> run basic QC -> persist qc_report -> update task status -> query report`
 
 Current scope is limited to the Spring Boot backend API. It does not include auth, Redis, RabbitMQ, async pipelines, or complex workflow orchestration.
 
@@ -12,32 +12,35 @@ Current scope is limited to the Spring Boot backend API. It does not include aut
 - Spring Boot 3
 - MyBatis-Plus
 - MySQL
-- MinIO
+- Alibaba Cloud OSS
 
 ## Before You Start
 
 1. Create a MySQL database such as `mmdp_db`.
-2. Run [schema.sql](D:/project/multimodal-data-platform/mmdp-backend/src/main/resources/schema.sql).
-3. Start MinIO and make sure the endpoint is reachable.
-4. Provide local configuration through environment variables or local overrides.
+2. Run [schema.sql](/D:/workspace/multimodal-data-platform/mmdp-backend/src/main/resources/schema.sql).
+3. If `data_file.storage_provider` does not exist yet, run the manual SQL below in Navicat.
+4. Copy `.env.example` to `.env` and fill in your real database and OSS values.
 
 ## Configuration
 
 The committed `application.yml` is safe to publish. Real credentials must be provided locally.
 
-Supported environment variables:
+Supported `.env` variables:
 
-```bash
-MMDP_DB_URL=jdbc:mysql://localhost:3306/mmdp_db?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+```properties
+MMDP_DB_URL=jdbc:mysql://127.0.0.1:13306/mmdp_db?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
 MMDP_DB_USERNAME=root
 MMDP_DB_PASSWORD=your-password
-MMDP_MINIO_ENDPOINT=http://localhost:29010
-MMDP_MINIO_ACCESS_KEY=minioadmin
-MMDP_MINIO_SECRET_KEY=your-secret
-MMDP_MINIO_BUCKET=mmdp-bucket
+
+MMDP_STORAGE_DEFAULT_PROVIDER=OSS
+MMDP_OSS_ENDPOINT=https://oss-cn-shanghai.aliyuncs.com
+MMDP_OSS_ACCESS_KEY_ID=your-access-key-id
+MMDP_OSS_ACCESS_KEY_SECRET=your-access-key-secret
+MMDP_OSS_BUCKET=your-bucket
+MMDP_OSS_REGION=cn-shanghai
 ```
 
-Spring also supports OS-level environment variables or IDE run configuration variables.
+Spring Boot reads the backend `.env` file through `spring.config.import`, so the same variable names can be used locally and on cloud servers.
 
 ## Run
 
@@ -62,7 +65,12 @@ Run:
 SOURCE src/main/resources/schema.sql;
 ```
 
-Or copy the contents of `schema.sql` into your MySQL client and execute them there.
+Then execute this manual migration in Navicat if needed:
+
+```sql
+ALTER TABLE data_file
+ADD COLUMN storage_provider VARCHAR(32) NOT NULL DEFAULT 'OSS' COMMENT 'storage provider' AFTER sha256;
+```
 
 ## API Endpoints
 
@@ -132,3 +140,4 @@ curl "http://localhost:19021/api/tasks/1/qc-report"
 
 - The service stores `report_json` as structured JSON text for direct frontend rendering.
 - Upload and QC currently run synchronously to keep the MVP loop simple.
+- File download is resolved by `storage_provider + bucket_name + object_key`; `storage_url` is only a display field.

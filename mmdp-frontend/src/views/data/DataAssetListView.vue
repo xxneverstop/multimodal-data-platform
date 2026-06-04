@@ -16,48 +16,60 @@
     <PageCard title="资产列表">
       <DataTableShell>
         <table class="min-w-full text-left text-sm">
-          <thead class="bg-slate-50 text-xs text-slate-500">
+          <thead class="bg-[var(--color-surface-page)] text-xs text-[var(--color-text-tertiary)]">
             <tr>
-              <th class="px-3 py-2.5 font-medium">资产名称</th>
-              <th class="px-3 py-2.5 font-medium">文件名</th>
-              <th class="px-3 py-2.5 font-medium">文件大小</th>
-              <th class="px-3 py-2.5 font-medium">时长</th>
-              <th class="px-3 py-2.5 font-medium">taskId</th>
-              <th class="px-3 py-2.5 font-medium">sessionId</th>
-              <th class="px-3 py-2.5 font-medium">上传者</th>
-              <th class="px-3 py-2.5 font-medium">上传时间</th>
-              <th class="px-3 py-2.5 font-medium">类型</th>
-              <th class="px-3 py-2.5 font-medium">模态</th>
-              <th class="px-3 py-2.5 font-medium">格式</th>
-              <th class="px-3 py-2.5 font-medium">来源</th>
-              <th class="px-3 py-2.5 font-medium">标注状态</th>
-              <th class="px-3 py-2.5 font-medium">质检状态</th>
-              <th class="px-3 py-2.5 font-medium text-right">操作</th>
+              <th class="px-3 py-2 font-medium">资产名称</th>
+              <th class="px-3 py-2 font-medium">文件名</th>
+              <th class="px-3 py-2 font-medium">文件大小</th>
+              <th class="px-3 py-2 font-medium">时长</th>
+              <th class="px-3 py-2 font-medium">taskId</th>
+              <th class="px-3 py-2 font-medium">sessionId</th>
+              <th class="px-3 py-2 font-medium">上传者</th>
+              <th class="px-3 py-2 font-medium">上传时间</th>
+              <th class="px-3 py-2 font-medium">类型</th>
+              <th class="px-3 py-2 font-medium">模态</th>
+              <th class="px-3 py-2 font-medium">格式</th>
+              <th class="px-3 py-2 font-medium">来源</th>
+              <th class="px-3 py-2 font-medium">标注状态</th>
+              <th class="px-3 py-2 font-medium">质检状态</th>
+              <th class="px-3 py-2 font-medium text-right">操作</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-200 bg-white">
-            <tr v-for="asset in filteredAssets" :key="asset.id" class="hover:bg-slate-50">
-              <td class="px-3 py-2.5 font-medium text-slate-900">{{ asset.assetName }}</td>
-              <td class="px-3 py-2.5 text-slate-600">{{ asset.fileName }}</td>
-              <td class="px-3 py-2.5 text-slate-600">{{ formatFileSize(asset.fileSize) }}</td>
-              <td class="px-3 py-2.5 text-slate-600">{{ asset.duration }}</td>
-              <td class="px-3 py-2.5 text-slate-600">{{ asset.taskId }}</td>
-              <td class="px-3 py-2.5 text-slate-600">{{ asset.sessionId }}</td>
-              <td class="px-3 py-2.5 text-slate-600">{{ asset.uploader }}</td>
-              <td class="px-3 py-2.5 text-slate-500">{{ formatDateTime(asset.uploadedAt) }}</td>
-              <td class="px-3 py-2.5 text-slate-600">{{ asset.assetType }}</td>
-              <td class="px-3 py-2.5 text-slate-600">{{ asset.modality }}</td>
-              <td class="px-3 py-2.5 text-slate-600">{{ asset.fileFormat }}</td>
-              <td class="px-3 py-2.5 text-slate-600">{{ formatSourceType(asset.sourceType) }}</td>
-              <td class="px-3 py-2.5 text-slate-600">{{ asset.annotationStatus }}</td>
+          <tbody class="divide-y divide-[var(--color-border-default)] bg-white">
+            <tr v-for="asset in filteredAssets" :key="asset.id" class="hover:bg-[var(--color-brand-50)]/15">
+              <td class="px-3 py-2.5 font-medium text-[var(--color-text-primary)] text-[13px]">
+                <span class="block max-w-[180px] truncate" :title="asset.assetName">{{ asset.assetName }}</span>
+              </td>
+              <td class="px-3 py-2.5 text-[var(--color-text-secondary)] text-[13px]">
+                <span class="block max-w-[160px] truncate" :title="asset.fileName">{{ asset.fileName }}</span>
+              </td>
+              <td class="px-3 py-2.5 text-[var(--color-text-secondary)] text-[13px]">{{ formatFileSize(asset.fileSize) }}</td>
+              <td class="px-3 py-2.5 text-[var(--color-text-secondary)] text-[13px]">{{ asset.duration }}</td>
+              <td class="px-3 py-2.5 text-[var(--color-text-secondary)] text-[13px]">{{ asset.taskId }}</td>
+              <td class="px-3 py-2.5 text-[var(--color-text-secondary)] text-[13px]">{{ asset.sessionId }}</td>
+              <td class="px-3 py-2.5 text-[var(--color-text-secondary)] text-[13px]">{{ asset.uploader }}</td>
+              <td class="px-3 py-2.5 text-[var(--color-text-tertiary)] text-[13px]">{{ formatDateTime(asset.uploadedAt) }}</td>
+              <td class="px-3 py-2.5 text-[var(--color-text-secondary)] text-[13px]">{{ asset.assetType }}</td>
+              <td class="px-3 py-2.5 text-[var(--color-text-secondary)] text-[13px]">{{ asset.modality }}</td>
+              <td class="px-3 py-2.5 text-[var(--color-text-secondary)] text-[13px]">{{ asset.fileFormat }}</td>
+              <td class="px-3 py-2.5 text-[var(--color-text-secondary)] text-[13px]">{{ formatSourceType(asset.sourceType) }}</td>
+              <td class="px-3 py-2.5 text-[var(--color-text-secondary)] text-[13px]">{{ asset.annotationStatus }}</td>
               <td class="px-3 py-2.5"><StatusBadge :status="asset.qcStatus" /></td>
               <td class="px-3 py-2.5 text-right">
-                <div class="flex justify-end gap-2">
+                <div class="flex justify-end gap-1.5">
                   <BaseButton size="sm" variant="ghost" :to="`/data/${asset.id}?taskId=${asset.taskId}`">详情</BaseButton>
                   <BaseButton size="sm" variant="ghost" :to="`/play/${asset.sessionId}`">
                     <BaseIcon name="play" size="sm" />
                     播放
                   </BaseButton>
+                </div>
+              </td>
+            </tr>
+            <tr v-if="!filteredAssets.length">
+              <td colspan="15" class="px-3 py-10 text-center text-[var(--color-text-tertiary)]">
+                <div class="flex flex-col items-center gap-1.5">
+                  <BaseIcon name="info" class="text-[var(--color-text-tertiary)] opacity-40" />
+                  <span class="text-[13px]">暂无数据资产</span>
                 </div>
               </td>
             </tr>

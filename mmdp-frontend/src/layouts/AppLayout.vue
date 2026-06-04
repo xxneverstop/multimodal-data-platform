@@ -1,10 +1,10 @@
 <template>
   <div class="min-h-screen bg-[var(--color-surface-page)] text-[var(--color-text-900)]">
-    <header class="fixed inset-x-0 top-0 z-40 border-b border-slate-200 bg-white">
+    <header class="fixed inset-x-0 top-0 z-40 border-b border-[var(--color-border-soft)] bg-white">
       <div class="flex h-14 items-center justify-between gap-4 px-4 md:px-5">
         <RouterLink
           to="/home"
-          class="inline-flex items-center text-slate-900 transition hover:text-[var(--color-brand-600)]"
+          class="inline-flex items-center text-[var(--color-text-primary)] transition hover:text-[var(--color-brand-600)]"
         >
           <MmdpLogo :size="32" />
         </RouterLink>
@@ -12,7 +12,7 @@
         <div ref="accountMenuRef" class="relative">
           <button
             type="button"
-            class="inline-flex h-9 items-center gap-2 rounded-[10px] border border-slate-200 bg-white px-3 text-sm text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+            class="inline-flex h-8 items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-white px-3 text-sm text-[var(--color-text-secondary)] transition hover:border-[var(--color-text-tertiary)] hover:bg-[var(--color-hover-subtle)] hover:text-[var(--color-text-primary)]"
             @click="accountMenuOpen = !accountMenuOpen"
           >
             <BaseIcon name="user-circle" size="sm" />
@@ -27,13 +27,13 @@
 
           <div
             v-if="accountMenuOpen"
-            class="absolute right-0 top-[calc(100%+8px)] w-[180px] rounded-[12px] border border-slate-200 bg-white p-1.5 shadow-[0_12px_32px_rgba(15,23,42,0.10)]"
+            class="absolute right-0 top-[calc(100%+8px)] w-[180px] rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-white p-1.5 shadow-[var(--shadow-dropdown)]"
           >
             <button
               v-for="action in accountActions"
               :key="action.label"
               type="button"
-              class="flex w-full items-center gap-2 rounded-[8px] px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
+              class="flex w-full items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-left text-sm text-[var(--color-text-secondary)] transition hover:bg-[var(--color-hover-subtle)] hover:text-[var(--color-text-primary)]"
               @click="handleAccountAction(action.label)"
             >
               <BaseIcon :name="action.icon" size="sm" />
@@ -45,13 +45,13 @@
     </header>
 
     <div class="flex min-h-screen w-full min-w-0 pt-14">
-      <aside class="hidden shrink-0 border-r border-slate-200 bg-white lg:flex">
+      <aside class="hidden shrink-0 border-r border-[var(--color-border-soft)] bg-white lg:flex">
         <div class="sticky top-14 flex h-[calc(100vh-56px)] w-[56px] flex-col items-center gap-2 px-2 py-4">
           <RouterLink
             to="/home"
             class="nav-rail-button"
             :class="route.path.startsWith('/home') ? 'nav-rail-button-active' : ''"
-            title="主页"
+            title="首页"
           >
             <BaseIcon name="home" />
           </RouterLink>
@@ -62,7 +62,7 @@
 
       <aside
         v-if="showSecondarySidebar"
-        class="hidden w-[92px] shrink-0 border-r border-slate-200 bg-white lg:flex lg:flex-col"
+        class="hidden w-[160px] shrink-0 border-r border-[var(--color-border-soft)] bg-white lg:flex lg:flex-col"
       >
         <div class="sticky top-14 h-[calc(100vh-56px)] px-2 py-4">
           <nav class="space-y-1">
@@ -70,34 +70,36 @@
               v-for="item in secondaryItems"
               :key="item.to"
               :to="item.to"
-              class="flex items-center justify-center rounded-[8px] border px-2 py-2 text-sm transition"
+              class="relative flex items-center gap-2 rounded-[var(--radius-md)] border border-transparent px-3 py-2 text-sm transition"
               :class="
                 route.path === item.to
-                  ? 'border-slate-300 bg-slate-100 text-slate-900'
-                  : 'border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  ? ['app-nav-module-active before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[2px] before:rounded-r', moduleToneClass(item.to)]
+                  : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-subtle)] hover:text-[var(--color-text-primary)]'
               "
             >
-              <span class="w-full truncate text-center">{{ item.label }}</span>
+              <BaseIcon v-if="item.icon" :name="item.icon" size="sm" class="shrink-0" />
+              <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
             </RouterLink>
           </nav>
         </div>
       </aside>
 
       <div class="min-w-0 flex-1">
-        <div class="border-b border-slate-200 bg-white px-4 py-2.5 md:px-5 lg:hidden">
+        <div class="border-b border-[var(--color-border-soft)] bg-white px-4 py-2.5 md:px-5 lg:hidden">
           <nav class="flex gap-2 overflow-x-auto pb-1">
             <RouterLink
               v-for="item in mobileItems"
               :key="item.to"
               :to="item.to"
-              class="shrink-0 rounded-[8px] border px-3 py-1.5 text-sm transition"
+              class="inline-flex shrink-0 items-center gap-1.5 rounded-[var(--radius-md)] border px-3 py-1.5 text-sm transition"
               :class="
                 route.path === item.to
-                  ? 'border-slate-300 bg-slate-100 text-slate-900'
-                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  ? ['app-nav-module-active', moduleToneClass(item.to)]
+                  : 'border-[var(--color-border-default)] bg-white text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-subtle)] hover:text-[var(--color-text-primary)]'
               "
             >
-              {{ item.label }}
+              <BaseIcon v-if="item.icon" :name="item.icon" size="sm" class="shrink-0" />
+              <span>{{ item.label }}</span>
             </RouterLink>
           </nav>
         </div>
@@ -122,27 +124,31 @@ import SideNavGroup from "@/components/SideNavGroup.vue";
 const route = useRoute();
 const router = useRouter();
 
-const functionItems = [
-  { label: "数据", to: "/data" },
-  { label: "上传", to: "/upload" },
-  { label: "采集", to: "/acquisition" },
-  { label: "会话", to: "/sessions" },
-  { label: "处理", to: "/processing" },
-  { label: "标注", to: "/annotation" },
-  { label: "质检", to: "/qc" },
-  { label: "导出", to: "/export" },
-  { label: "原型", to: "/collector" }
+type NavItem = {
+  label: string;
+  to: string;
+  icon?: string;
+};
+
+const functionItems: NavItem[] = [
+  { label: "上传", to: "/upload", icon: "upload" },
+  { label: "任务", to: "/acquisition", icon: "clipboard-check" },
+  { label: "采集", to: "/sessions", icon: "camera" },
+  { label: "处理", to: "/processing", icon: "workflow" },
+  { label: "标注", to: "/annotation", icon: "tags" },
+  { label: "质检", to: "/qc", icon: "shield" },
+  { label: "导出", to: "/export", icon: "download" },
 ];
 
-const managementItems = [
-  { label: "用户", to: "/management/users" },
-  { label: "设备", to: "/management/devices" },
-  { label: "流程", to: "/management/workflows" },
-  { label: "存储", to: "/management/storages" },
-  { label: "字典", to: "/management/dictionaries" }
+const managementItems: NavItem[] = [
+  { label: "用户", to: "/management/users", icon: "users" },
+  { label: "设备", to: "/management/devices", icon: "server" },
+  { label: "流程", to: "/management/workflows", icon: "git-branch" },
+  { label: "存储", to: "/management/storages", icon: "database" },
+  { label: "字典", to: "/management/dictionaries", icon: "book" },
 ];
 
-const mobileItems = [{ label: "主页", to: "/home" }, ...functionItems];
+const mobileItems: NavItem[] = [{ label: "首页", to: "/home" }, ...functionItems];
 
 const isHomeRoute = computed(() => route.path.startsWith("/home"));
 const isManagementRoute = computed(() => route.path.startsWith("/management"));
@@ -156,13 +162,13 @@ const accountMenuOpen = ref(false);
 const accountActions = [
   { label: "账号设置", icon: "settings" },
   { label: "个人信息", icon: "user-circle" },
-  { label: "退出登录", icon: "users" }
+  { label: "退出登录", icon: "users" },
 ];
 
 function setSection(target: "function" | "management") {
   if (target === "function") {
     if (!isFunctionRoute.value) {
-      router.push("/data");
+      router.push("/acquisition");
     }
     return;
   }
@@ -174,6 +180,17 @@ function setSection(target: "function" | "management") {
 
 function handleAccountAction(_label: string) {
   accountMenuOpen.value = false;
+}
+
+function moduleToneClass(path: string) {
+  if (path.startsWith("/upload")) return "app-tone-upload";
+  if (path.startsWith("/acquisition")) return "app-tone-task";
+  if (path.startsWith("/sessions")) return "app-tone-session";
+  if (path.startsWith("/processing")) return "app-tone-process";
+  if (path.startsWith("/annotation")) return "app-tone-annotation";
+  if (path.startsWith("/qc")) return "app-tone-qc";
+  if (path.startsWith("/export")) return "app-tone-export";
+  return "app-tone-brand";
 }
 
 function handleDocumentClick(event: MouseEvent) {

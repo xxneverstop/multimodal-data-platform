@@ -1,84 +1,120 @@
 <template>
-  <div v-if="detail" class="space-y-4">
-    <PageHeader eyebrow="功能 / 采集" :title="detail.task.taskName" description="查看任务下的会话、数据和最近记录。" :meta="headerMeta">
+  <div v-if="detail" class="space-y-5">
+    <PageHeader
+      eyebrow="任务 Workspace"
+      :title="detail.task.taskName"
+      description="围绕任务当前阶段、健康状态、采集产出和下一步动作组织的工作台。"
+      surface="plain"
+    >
       <template #actions>
-        <BaseButton :to="`/sessions/${detail.sessions[0]?.sessionId}`">进入 Session</BaseButton>
-        <BaseButton variant="primary" :to="`/upload?taskId=${detail.task.id}&sessionId=${detail.sessions[0]?.sessionId}`">新建</BaseButton>
+        <div class="flex flex-wrap items-center justify-end gap-2">
+          <StatusBadge :status="detail.task.status" />
+          <BaseButton variant="soft" tone="task" :to="`/upload?taskId=${detail.task.id}`">上传数据</BaseButton>
+          <BaseButton :to="`/sessions?taskId=${detail.task.id}`">查看采集</BaseButton>
+        </div>
       </template>
     </PageHeader>
 
-    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      <EntitySummaryCard label="taskId" :value="detail.task.id" />
-      <EntitySummaryCard label="Session 数" :value="detail.sessions.length" />
-      <EntitySummaryCard label="资产数" :value="detail.assets.length" />
-      <EntitySummaryCard label="最近质检" :value="detail.reports.length ? detail.reports[0].qcStatus : '暂无'" />
-    </div>
+    <WorkspaceOverviewBar :items="overviewItems" :secondary="overviewSecondary" />
 
-    <SectionTabs v-model="activeTab" :items="tabs" />
+    <PageCard eyebrow="健康摘要" title="当前任务是否健康" description="快速判断当前任务下的异常、待处理和最近质检导出情况。">
+      <WorkspaceHealthSummary :items="healthItems" />
+    </PageCard>
 
-    <PageCard v-if="activeTab === 'sessions'" title="会话">
-      <div class="grid gap-3 md:grid-cols-2">
-        <div v-for="session in detail.sessions" :key="session.sessionId" class="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-3">
-          <div class="flex items-center justify-between gap-3">
-            <div>
-              <div class="text-sm font-medium text-slate-900">{{ session.sessionName }}</div>
-              <div class="mt-1 text-xs text-slate-500">{{ session.sessionId }}</div>
+    <PageCard eyebrow="阶段进度" title="任务当前处于什么阶段" description="沿着任务、采集、资产、处理、质检和导出的主线理解当前所处位置。">
+      <WorkflowTimeline :stages="taskStages" />
+    </PageCard>
+
+    <section class="space-y-3">
+      <div class="flex items-end justify-between gap-3">
+        <div>
+          <div class="text-[11px] font-medium tracking-[0.08em] text-[var(--color-text-tertiary)]">规模概览</div>
+          <h2 class="mt-1 text-[17px] font-semibold text-[var(--color-text-primary)]">任务产出规模</h2>
+        </div>
+      </div>
+      <BusinessMetrics :items="metricItems" />
+    </section>
+
+    <PageCard eyebrow="近期动态" title="Recent Sessions" description="先看最近发生了什么，再进入完整采集工作区。">
+      <div v-if="recentSessions.length" class="grid gap-3 xl:grid-cols-3">
+        <article
+          v-for="session in recentSessions"
+          :key="session.sessionId"
+          class="workspace-secondary-row app-tone-task"
+        >
+          <div class="min-w-0 space-y-1">
+            <div class="app-summary-title-strong">{{ session.sessionCode || session.sessionId }}</div>
+            <div class="app-summary-subtitle-muted">{{ session.sourceSummary || session.modality || "暂无数据类型摘要" }}</div>
+            <div class="app-summary-stat-inline">
+              <span>资产 <strong>{{ session.assetCount }}</strong></span>
+              <span>文件 <strong>{{ session.fileCount }}</strong></span>
+              <span>更新 {{ sessionUpdatedAt(session) }}</span>
             </div>
+          </div>
+          <div class="app-status-stack">
             <StatusBadge :status="session.qcStatus" />
           </div>
-        </div>
+        </article>
       </div>
+      <div v-else class="workspace-muted-empty">当前任务下还没有可展示的采集会话。</div>
     </PageCard>
 
-    <PageCard v-else-if="activeTab === 'assets'" title="数据">
-      <DataTableShell>
-        <table class="min-w-full text-left text-sm">
-          <thead class="bg-slate-50 text-xs text-slate-500">
-            <tr>
-              <th class="px-3 py-2.5 font-medium">资产名称</th>
-              <th class="px-3 py-2.5 font-medium">sessionId</th>
-              <th class="px-3 py-2.5 font-medium">类型</th>
-              <th class="px-3 py-2.5 font-medium">来源</th>
-              <th class="px-3 py-2.5 font-medium">状态</th>
-              <th class="px-3 py-2.5 font-medium text-right">操作</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-200 bg-white">
-            <tr v-for="asset in detail.assets" :key="asset.id">
-              <td class="px-3 py-2.5 font-medium text-slate-900">{{ asset.assetName }}</td>
-              <td class="px-3 py-2.5 text-slate-600">{{ asset.sessionId }}</td>
-              <td class="px-3 py-2.5 text-slate-600">{{ asset.assetType }}</td>
-              <td class="px-3 py-2.5 text-slate-600">{{ formatSourceType(asset.sourceType) }}</td>
-              <td class="px-3 py-2.5"><StatusBadge :status="asset.qcStatus" /></td>
-              <td class="px-3 py-2.5 text-right"><BaseButton size="sm" variant="ghost" :to="`/data/${asset.id}?taskId=${detail.task.id}`">详情</BaseButton></td>
-            </tr>
-          </tbody>
-        </table>
-      </DataTableShell>
+    <PageCard eyebrow="核心产出" title="Session Workspace List" description="任务的主要产出是 Session，这里按工作台视角查看每个采集的状态、健康度和下一步入口。">
+      <div v-if="sortedSessions.length" class="space-y-3">
+        <article
+          v-for="session in sortedSessions"
+          :key="session.sessionId"
+          class="workspace-core-row app-row-accent-task"
+        >
+          <div class="min-w-0 flex-1 space-y-2">
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="app-summary-title-strong">{{ session.sessionCode || session.sessionId }}</div>
+              <span class="rounded-full border border-[var(--module-task-soft-border)] bg-[var(--module-task-soft-bg)] px-2 py-0.5 text-[11px] font-medium text-[var(--module-task-soft-text)]">
+                {{ sessionHealthLabel(session) }}
+              </span>
+            </div>
+            <div class="app-summary-subtitle-muted">{{ session.sourceSummary || session.modality || "暂无数据类型摘要" }}</div>
+            <div class="app-summary-meta-inline">
+              <span>被试 <strong>{{ session.subjectCode || "-" }}</strong></span>
+              <span>·</span>
+              <span>动作 <strong>{{ session.actionName || "-" }}</strong></span>
+              <span>·</span>
+              <span>Profile <strong>{{ session.profileName || session.profileCode || "-" }}</strong></span>
+            </div>
+            <div class="app-summary-stat-inline">
+              <span>资产 <strong>{{ session.assetCount }}</strong></span>
+              <span>文件 <strong>{{ session.fileCount }}</strong></span>
+              <span>更新 {{ sessionUpdatedAt(session) }}</span>
+            </div>
+          </div>
+
+          <div class="flex min-w-[180px] flex-col items-start gap-2 xl:items-end">
+            <div class="app-status-stack">
+              <StatusBadge :status="session.exportStatus" />
+              <StatusBadge :status="session.qcStatus" />
+              <StatusBadge :status="session.processingStatus" />
+            </div>
+            <div class="app-action-group">
+              <BaseButton size="sm" variant="soft" tone="task" :to="`/sessions/${session.sessionId}`">查看采集</BaseButton>
+              <BaseButton size="sm" variant="ghost" :to="`/play/${session.sessionId}`">播放</BaseButton>
+              <BaseButton size="sm" variant="ghost" :to="`/sessions/${session.sessionId}`">详情</BaseButton>
+            </div>
+          </div>
+        </article>
+      </div>
+      <div v-else class="workspace-muted-empty">当前任务尚未产出采集会话，建议先上传数据或进入采集流程。</div>
     </PageCard>
 
-    <PageCard v-else title="最近记录">
-      <div class="grid gap-4 xl:grid-cols-2">
-        <div class="space-y-2.5">
-          <h3 class="text-sm font-medium text-slate-900">处理记录</h3>
-          <div v-for="job in detail.jobs" :key="job.id" class="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-3">
-            <div class="flex items-center justify-between gap-3">
-              <div class="text-sm font-medium text-slate-900">{{ job.pipelineId }}</div>
-              <StatusBadge :status="job.status" />
-            </div>
-          </div>
-        </div>
-        <div class="space-y-2.5">
-          <h3 class="text-sm font-medium text-slate-900">质检结果</h3>
-          <div v-for="report in detail.reports" :key="report.id" class="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-3">
-            <div class="flex items-center justify-between gap-3">
-              <div class="text-sm font-medium text-slate-900">报告 #{{ report.id }}</div>
-              <StatusBadge :status="report.qcStatus" />
-            </div>
-            <div class="mt-1 text-xs text-slate-500">{{ report.summary }}</div>
-          </div>
-        </div>
-      </div>
+    <PageCard eyebrow="相关处理" title="Related Processing" description="这些采集后续是否进入处理链路，以及最近发生了哪些处理作业。">
+      <RelatedProcessingPanel :items="processingItems" empty-text="当前任务尚未进入处理阶段。" />
+    </PageCard>
+
+    <PageCard eyebrow="下一步" title="Next Actions" description="根据当前任务的阶段和健康状态，给出最值得执行的后续动作。">
+      <NextActionsPanel :actions="nextActions" />
+    </PageCard>
+
+    <PageCard eyebrow="元数据" title="Task Metadata" description="基础记录信息下沉到页面底部，避免与工作台主线争夺注意力。" secondary>
+      <WorkspaceMetadataGrid :items="metadataItems" />
     </PageCard>
   </div>
 </template>
@@ -88,24 +124,304 @@ import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { fetchAcquisitionDetail } from "@/api/platform";
 import BaseButton from "@/components/BaseButton.vue";
-import DataTableShell from "@/components/DataTableShell.vue";
-import EntitySummaryCard from "@/components/EntitySummaryCard.vue";
+import BusinessMetrics, { type MetricItem } from "@/components/BusinessMetrics.vue";
+import NextActionsPanel from "@/components/NextActionsPanel.vue";
 import PageCard from "@/components/PageCard.vue";
 import PageHeader from "@/components/PageHeader.vue";
-import SectionTabs from "@/components/SectionTabs.vue";
+import RelatedProcessingPanel from "@/components/RelatedProcessingPanel.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
-import type { AcquisitionDetailViewModel } from "@/types/platform";
-import { formatSourceType } from "@/utils/format";
+import WorkflowTimeline, { type WorkflowStageStatus } from "@/components/WorkflowTimeline.vue";
+import WorkspaceHealthSummary from "@/components/WorkspaceHealthSummary.vue";
+import WorkspaceMetadataGrid from "@/components/WorkspaceMetadataGrid.vue";
+import WorkspaceOverviewBar from "@/components/WorkspaceOverviewBar.vue";
+import type { AcquisitionDetailViewModel, SessionRecord } from "@/types/platform";
+import { formatDateTime, formatStatusLabel } from "@/utils/format";
 
 const route = useRoute();
 const detail = ref<AcquisitionDetailViewModel | null>(null);
-const activeTab = ref("sessions");
-const tabs = [
-  { label: "会话", value: "sessions" },
-  { label: "数据", value: "assets" },
-  { label: "记录", value: "logs" }
-];
-const headerMeta = computed(() => detail.value ? [{ label: "subjectCode", value: detail.value.task.subjectCode }, { label: "actionName", value: detail.value.task.actionName }] : []);
+
+const FAILURE_STATUSES = new Set(["FAILED", "ERROR", "QC_FAILED", "WARNING", "QC_WARNING"]);
+const PENDING_STATUSES = new Set(["PENDING", "WAITING", "RUNNING", "UPLOADING", "CREATED"]);
+const READY_STATUSES = new Set(["READY", "PASSED", "QC_PASSED", "SUCCESS", "PLAYABLE"]);
+
+const sortedSessions = computed(() =>
+  [...(detail.value?.sessions ?? [])].sort((left, right) =>
+    latestTime(right.startedAt, right.createdAt).localeCompare(latestTime(left.startedAt, left.createdAt)),
+  ),
+);
+
+const recentSessions = computed(() => sortedSessions.value.slice(0, 3));
+
+const overviewItems = computed(() => {
+  const task = detail.value?.task;
+  return [
+    { label: "被试", value: task?.subjectCode },
+    { label: "动作", value: task?.actionName },
+    { label: "Profile", value: task?.profileName || "-" },
+    { label: "日期", value: task?.collectDate || "-" },
+  ];
+});
+
+const overviewSecondary = computed(() => {
+  const task = detail.value?.task;
+  if (!task) {
+    return "";
+  }
+  return `任务编号 ${task.taskCode || task.id} · 创建时间 ${formatDateTime(task.createdAt)} · 创建人 ${task.operatorName || "-"}`;
+});
+
+const abnormalSessions = computed(() =>
+  sortedSessions.value.filter((session) =>
+    [session.qcStatus, session.exportStatus, session.processingStatus, session.uploadStatus].some((status) =>
+      FAILURE_STATUSES.has(status),
+    ),
+  ),
+);
+
+const pendingSessions = computed(() =>
+  sortedSessions.value.filter((session) =>
+    [session.qcStatus, session.exportStatus, session.processingStatus, session.uploadStatus].some((status) =>
+      PENDING_STATUSES.has(status),
+    ),
+  ),
+);
+
+const latestReportStatus = computed(() => detail.value?.reports?.[0]?.qcStatus || detail.value?.task.status || "PENDING");
+const readyExportCount = computed(() => sortedSessions.value.filter((session) => session.exportStatus === "READY").length);
+
+const healthItems = computed(() => [
+  {
+    label: "异常采集数",
+    value: abnormalSessions.value.length,
+    caption: abnormalSessions.value.length ? "建议优先查看异常采集与质检结果。" : "当前没有明显异常采集。",
+    icon: "shield-alert",
+    tone: "qc" as const,
+  },
+  {
+    label: "待处理采集数",
+    value: pendingSessions.value.length,
+    caption: pendingSessions.value.length ? "仍有采集处于待处理或处理中。" : "当前采集处理链路较为顺畅。",
+    icon: "clock",
+    tone: "process" as const,
+  },
+  {
+    label: "最近 QC 状态",
+    value: formatStatusLabel(latestReportStatus.value),
+    caption: "基于最近一次质检报告或任务状态推导。",
+    icon: "clipboard-check",
+    tone: "qc" as const,
+  },
+  {
+    label: "导出可用采集",
+    value: `${readyExportCount.value}/${sortedSessions.value.length || 0}`,
+    caption: readyExportCount.value ? "已有采集具备导出条件。" : "当前尚无 READY 导出采集。",
+    icon: "download",
+    tone: "export" as const,
+  },
+]);
+
+const taskStages = computed<
+  Array<{ label: string; caption: string; status: WorkflowStageStatus; tone?: "task" | "session" | "asset" | "process" | "qc" | "export" }>
+>(() => {
+  const hasSessions = sortedSessions.value.length > 0;
+  const hasAssets = (detail.value?.assets.length ?? 0) > 0;
+  const hasJobs = (detail.value?.jobs.length ?? 0) > 0;
+  const runningJobs = detail.value?.jobs.some((job) => PENDING_STATUSES.has(job.status)) ?? false;
+  const hasReports = (detail.value?.reports.length ?? 0) > 0;
+  const hasRisk = abnormalSessions.value.length > 0;
+  const exportReady = readyExportCount.value > 0;
+
+  return [
+    { label: "Task Created", caption: "任务容器已建立", status: "done" as const, tone: "task" as const },
+    {
+      label: "Sessions Collected",
+      caption: hasSessions ? `${sortedSessions.value.length} 个采集已关联` : "等待采集进入",
+      status: (hasSessions ? "done" : "current") as WorkflowStageStatus,
+      tone: "session" as const,
+    },
+    {
+      label: "Assets Registered",
+      caption: hasAssets ? `${detail.value?.assets.length ?? 0} 个资产已登记` : "等待资产进入平台",
+      status: (hasAssets ? "done" : hasSessions ? "current" : "waiting") as WorkflowStageStatus,
+      tone: "asset" as const,
+    },
+    {
+      label: "Processing Running",
+      caption: hasJobs ? `${detail.value?.jobs.length ?? 0} 条处理记录` : "当前尚无处理作业",
+      status: (runningJobs ? "current" : hasJobs ? "done" : "waiting") as WorkflowStageStatus,
+      tone: "process" as const,
+    },
+    {
+      label: "QC Reviewed",
+      caption: hasReports ? `${detail.value?.reports.length ?? 0} 条质检结果` : "等待质检结果",
+      status: (hasRisk ? "risk" : hasReports ? "done" : "waiting") as WorkflowStageStatus,
+      tone: "qc" as const,
+    },
+    {
+      label: "Export Ready",
+      caption: exportReady ? `${readyExportCount.value} 个采集可导出` : "尚未形成可导出结果",
+      status: (exportReady ? "done" : hasRisk ? "risk" : "waiting") as WorkflowStageStatus,
+      tone: "export" as const,
+    },
+  ];
+});
+
+const metricItems = computed<MetricItem[]>(() => {
+  const assets = detail.value?.assets ?? [];
+  const fileCount = assets.filter((asset) => asset.rawAsset.fileId != null).length;
+  const lastUpdated = latestTimestamp([
+    detail.value?.task.createdAt,
+    ...sortedSessions.value.map((session) => latestTime(session.startedAt, session.createdAt)),
+    ...(detail.value?.jobs ?? []).map((job) => latestTime(job.updatedAt, job.createdAt)),
+    ...(detail.value?.reports ?? []).map((report) => report.createdAt),
+  ]);
+
+  return [
+    { label: "采集总数", value: sortedSessions.value.length, caption: "当前任务下已识别的 Session 数量", icon: "camera", tone: "session" },
+    { label: "资产总数", value: assets.length, caption: "当前任务已登记的全部资产", icon: "database", tone: "asset" },
+    { label: "文件总数", value: fileCount, caption: "已关联实体文件的资产记录数", icon: "file", tone: "upload" },
+    { label: "最后更新时间", value: lastUpdated || "-", caption: "基于任务、采集、处理和质检时间推导", icon: "clock", tone: "task" },
+  ];
+});
+
+const processingItems = computed(() =>
+  [...(detail.value?.jobs ?? [])]
+    .sort((left, right) => latestTime(right.updatedAt, right.createdAt).localeCompare(latestTime(left.updatedAt, left.createdAt)))
+    .slice(0, 3)
+    .map((job) => ({
+      title: job.pipelineId || `处理作业 #${job.id}`,
+      subtitle: `作业 #${job.id} · ${job.executorType || "PROCESSING"}`,
+      caption: `最近时间 ${formatDateTime(latestTime(job.updatedAt, job.createdAt))}${job.operatorName ? ` · 操作人 ${job.operatorName}` : ""}`,
+      status: job.status,
+      to: "/processing",
+    })),
+);
+
+const nextActions = computed(() => {
+  if (!detail.value) {
+    return [];
+  }
+  const actions: Array<{
+    label: string;
+    description: string;
+    to: string;
+    cta?: string;
+    primary?: boolean;
+    tone?: "task" | "session" | "process" | "qc" | "export" | "upload";
+  }> = [];
+
+  const firstAbnormal = abnormalSessions.value[0];
+  const firstPending = pendingSessions.value[0];
+  const firstPlayable = sortedSessions.value.find((session) => READY_STATUSES.has(session.exportStatus) || session.processingStatus === "PLAYABLE");
+
+  if (!sortedSessions.value.length) {
+    actions.push({
+      label: "上传数据",
+      description: "当前任务下还没有采集会话，先上传数据或发起采集是最合理的下一步。",
+      to: `/upload?taskId=${detail.value.task.id}`,
+      cta: "上传数据",
+      primary: true,
+      tone: "upload",
+    });
+  } else if (firstAbnormal) {
+    actions.push({
+      label: "查看异常采集",
+      description: "当前任务下存在异常 Session，建议优先进入异常采集排查质检或导出问题。",
+      to: `/sessions/${firstAbnormal.sessionId}`,
+      cta: "进入异常采集",
+      primary: true,
+      tone: "qc",
+    });
+  } else if (firstPending) {
+    actions.push({
+      label: "继续查看采集",
+      description: "仍有采集处于待处理阶段，进入该采集可以继续查看资产、质检和导出进度。",
+      to: `/sessions/${firstPending.sessionId}`,
+      cta: "继续查看",
+      primary: true,
+      tone: "session",
+    });
+  } else if (firstPlayable) {
+    actions.push({
+      label: "播放最近采集",
+      description: "当前已有可直接进入的采集结果，适合继续做回放和内容确认。",
+      to: `/play/${firstPlayable.sessionId}`,
+      cta: "播放采集",
+      primary: true,
+      tone: "session",
+    });
+  } else {
+    actions.push({
+      label: "查看全部采集",
+      description: "进入完整采集列表，继续确认每个 Session 的状态与产出。",
+      to: `/sessions?taskId=${detail.value.task.id}`,
+      cta: "查看采集",
+      primary: true,
+      tone: "task",
+    });
+  }
+
+  actions.push({
+    label: "查看采集列表",
+    description: "按采集工作台方式继续查看该任务下的全部会话。",
+    to: `/sessions?taskId=${detail.value.task.id}`,
+    cta: "查看采集",
+    tone: "task",
+  });
+
+  if (processingItems.value.length) {
+    actions.push({
+      label: "查看相关处理",
+      description: "已有处理作业记录，可继续进入处理模块追踪结果。",
+      to: "/processing",
+      cta: "查看处理",
+      tone: "process",
+    });
+  }
+
+  return actions.slice(0, 3);
+});
+
+const metadataItems = computed(() => {
+  const task = detail.value?.task;
+  return [
+    { label: "taskId", value: task?.id ?? "-" },
+    { label: "taskCode", value: task?.taskCode || "-" },
+    { label: "创建时间", value: formatDateTime(task?.createdAt) },
+    { label: "创建人", value: task?.operatorName || "-" },
+    { label: "备注", value: task?.remark || "-" },
+  ];
+});
+
+function latestTime(primary?: string | null, fallback?: string | null) {
+  return primary || fallback || "";
+}
+
+function latestTimestamp(values: Array<string | undefined>) {
+  return values
+    .filter((value): value is string => Boolean(value))
+    .sort((left, right) => right.localeCompare(left))[0]
+    ? formatDateTime(
+        values
+          .filter((value): value is string => Boolean(value))
+          .sort((left, right) => right.localeCompare(left))[0],
+      )
+    : "";
+}
+
+function sessionUpdatedAt(session: SessionRecord) {
+  return formatDateTime(latestTime(session.startedAt, session.createdAt));
+}
+
+function sessionHealthLabel(session: SessionRecord) {
+  if ([session.qcStatus, session.exportStatus, session.processingStatus, session.uploadStatus].some((status) => FAILURE_STATUSES.has(status))) {
+    return "异常";
+  }
+  if ([session.qcStatus, session.exportStatus, session.processingStatus, session.uploadStatus].some((status) => PENDING_STATUSES.has(status))) {
+    return "待处理";
+  }
+  return "正常";
+}
 
 onMounted(async () => {
   detail.value = await fetchAcquisitionDetail(Number(route.params.taskId));

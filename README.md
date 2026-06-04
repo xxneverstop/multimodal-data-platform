@@ -7,7 +7,7 @@ MMDP is an MVP repository for a multimodal data platform with a Vue frontend and
 - `mmdp-frontend/`: Vue 3 + Vite frontend
 - `mmdp-backend/`: Spring Boot backend
 - `docs/`: project notes, MVP scope, and version docs
-- `container-bat/`: local helper scripts, including MinIO startup
+- `container-bat/`: local helper scripts
 
 ## Monorepo Convention
 
@@ -17,7 +17,7 @@ The frontend and backend live in a single repository during the MVP phase so we 
 
 The repository does not commit:
 
-- real database or MinIO credentials
+- real database or OSS credentials
 - local environment files
 - generated frontend artifacts
 - Maven build output and local dependency caches
@@ -49,10 +49,11 @@ Configuration is stored in `src/main/resources/application.yml` with safe defaul
 - `MMDP_DB_URL`
 - `MMDP_DB_USERNAME`
 - `MMDP_DB_PASSWORD`
-- `MMDP_MINIO_ENDPOINT`
-- `MMDP_MINIO_ACCESS_KEY`
-- `MMDP_MINIO_SECRET_KEY`
-- `MMDP_MINIO_BUCKET`
+- `MMDP_OSS_ENDPOINT`
+- `MMDP_OSS_ACCESS_KEY_ID`
+- `MMDP_OSS_ACCESS_KEY_SECRET`
+- `MMDP_OSS_BUCKET`
+- `MMDP_OSS_REGION`
 
 See [mmdp-backend/README.md](D:/project/multimodal-data-platform/mmdp-backend/README.md) for backend-specific setup details.
 

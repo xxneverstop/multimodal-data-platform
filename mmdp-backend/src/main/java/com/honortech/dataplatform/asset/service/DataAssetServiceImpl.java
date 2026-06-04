@@ -43,7 +43,9 @@ public class DataAssetServiceImpl implements DataAssetService {
         acquisitionTaskService.getTask(taskId);
         DataAsset asset = new DataAsset();
         asset.setTaskId(taskId);
+        asset.setSessionId(file.getSessionId());
         asset.setSourceType(AssetSourceType.UPLOADED_FILE.name());
+        asset.setSourceKey(file.getSourceKey());
         asset.setAssetType(assetType.name());
         asset.setDisplayName(file.getOriginalFilename());
         asset.setFileId(file.getId());
@@ -51,6 +53,46 @@ public class DataAssetServiceImpl implements DataAssetService {
         asset.setCreatedAt(LocalDateTime.now());
         dataAssetMapper.insert(asset);
         return asset;
+    }
+
+    @Override
+    @Transactional
+    public DataAsset createAcquisitionAsset(Long taskId, Long sessionId, String sourceKey, DataFile file, AssetType assetType) {
+        acquisitionTaskService.getTask(taskId);
+        DataAsset asset = new DataAsset();
+        asset.setTaskId(taskId);
+        asset.setSessionId(sessionId);
+        asset.setSourceType(AssetSourceType.ACQUISITION_SYNC.name());
+        asset.setSourceKey(sourceKey);
+        asset.setAssetType(assetType.name());
+        asset.setDisplayName(file.getOriginalFilename());
+        asset.setFileId(file.getId());
+        asset.setFileFormat(file.getFileExt());
+        asset.setCreatedAt(LocalDateTime.now());
+        dataAssetMapper.insert(asset);
+        return asset;
+    }
+
+    @Override
+    public DataAsset findByFileId(Long fileId) {
+        if (fileId == null) {
+            return null;
+        }
+        return dataAssetMapper.selectOne(
+                new LambdaQueryWrapper<DataAsset>()
+                        .eq(DataAsset::getFileId, fileId)
+                        .last("limit 1")
+        );
+    }
+
+    @Override
+    @Transactional
+    public DataAsset createUploadedAssetIfAbsent(Long taskId, DataFile file, AssetType assetType) {
+        DataAsset existing = findByFileId(file.getId());
+        if (existing != null) {
+            return existing;
+        }
+        return createUploadedAsset(taskId, file, assetType);
     }
 
     @Override
@@ -67,7 +109,9 @@ public class DataAssetServiceImpl implements DataAssetService {
 
         DataAsset asset = new DataAsset();
         asset.setTaskId(taskId);
+        asset.setSessionId(null);
         asset.setSourceType(AssetSourceType.EXTERNAL_PATH.name());
+        asset.setSourceKey(null);
         asset.setAssetType(assetType.name());
         asset.setDisplayName(request.displayName());
         asset.setExternalPath(request.externalPath());
@@ -94,7 +138,9 @@ public class DataAssetServiceImpl implements DataAssetService {
 
         DataAsset asset = new DataAsset();
         asset.setTaskId(taskId);
+        asset.setSessionId(null);
         asset.setSourceType(sourceType.name());
+        asset.setSourceKey(null);
         asset.setAssetType(assetType.name());
         asset.setDisplayName(request.assetName());
         asset.setFileId(request.fileId());
@@ -131,7 +177,9 @@ public class DataAssetServiceImpl implements DataAssetService {
             return new DataAssetResponse(
                     asset.getId(),
                     asset.getTaskId(),
+                    asset.getSessionId(),
                     asset.getSourceType(),
+                    asset.getSourceKey(),
                     asset.getAssetType(),
                     asset.getDisplayName(),
                     asset.getFileId(),

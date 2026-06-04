@@ -12,7 +12,9 @@ public class QcReport {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long taskId;
+    private Long sessionId;
     private Long fileId;
+    private String qcType;
     private String qcStatus;
     private String summary;
     private String reportJson;
@@ -40,6 +42,22 @@ public class QcReport {
 
     public void setFileId(Long fileId) {
         this.fileId = fileId;
+    }
+
+    public String getQcType() {
+        return qcType;
+    }
+
+    public void setQcType(String qcType) {
+        this.qcType = qcType;
+    }
+
+    public Long getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(Long sessionId) {
+        this.sessionId = sessionId;
     }
 
     public String getQcStatus() {

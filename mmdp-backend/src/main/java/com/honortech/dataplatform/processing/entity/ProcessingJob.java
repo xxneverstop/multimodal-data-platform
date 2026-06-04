@@ -12,6 +12,7 @@ public class ProcessingJob {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long taskId;
+    private Long sessionId;
     private String pipelineId;
     private String executorType;
     private String status;
@@ -41,6 +42,14 @@ public class ProcessingJob {
 
     public void setTaskId(Long taskId) {
         this.taskId = taskId;
+    }
+
+    public Long getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(Long sessionId) {
+        this.sessionId = sessionId;
     }
 
     public String getPipelineId() {

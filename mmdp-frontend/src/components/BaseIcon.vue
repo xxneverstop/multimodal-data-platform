@@ -78,6 +78,21 @@
       <path d="M4 18v1c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-1" />
     </svg>
     <svg
+      v-else-if="name === 'clipboard-check'"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class="h-full w-full"
+    >
+      <rect x="5" y="4" width="14" height="17" rx="2" />
+      <path d="M9 4.5h6" />
+      <path d="M9 11.5l2 2 4-4" />
+      <path d="M9 17h6" />
+    </svg>
+    <svg
       v-else-if="name === 'camera'"
       viewBox="0 0 24 24"
       fill="none"
@@ -146,6 +161,20 @@
     >
       <path d="M12 3 5 6v5c0 4.2 2.6 8.1 7 10 4.4-1.9 7-5.8 7-10V6l-7-3Z" />
       <path d="m9 12 2 2 4-4" />
+    </svg>
+    <svg
+      v-else-if="name === 'shield-alert'"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class="h-full w-full"
+    >
+      <path d="M12 3 5 6v5c0 4.2 2.6 8.1 7 10 4.4-1.9 7-5.8 7-10V6l-7-3Z" />
+      <path d="M12 8v5" />
+      <path d="M12 16h.01" />
     </svg>
     <svg
       v-else-if="name === 'download'"
@@ -334,6 +363,63 @@
       class="h-full w-full"
     >
       <polygon points="8 6 18 12 8 18 8 6" />
+    </svg>
+    <svg
+      v-else-if="name === 'file'"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class="h-full w-full"
+    >
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 3v5h5" />
+    </svg>
+    <svg
+      v-else-if="name === 'file-text'"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class="h-full w-full"
+    >
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 3v5h5" />
+      <path d="M9 13h6" />
+      <path d="M9 17h6" />
+    </svg>
+    <svg
+      v-else-if="name === 'archive'"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class="h-full w-full"
+    >
+      <rect x="3" y="4" width="18" height="5" rx="1.5" />
+      <path d="M5 9h14v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2Z" />
+      <path d="M10 13h4" />
+    </svg>
+    <svg
+      v-else-if="name === 'sheet'"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class="h-full w-full"
+    >
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <path d="M8 8h8" />
+      <path d="M8 12h8" />
+      <path d="M8 16h5" />
     </svg>
     <svg
       v-else-if="name === 'info'"

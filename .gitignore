@@ -1,11 +1,8 @@
 # Workspace
 .claude/
+CLAUDE.md
 .vscode/
 .idea/
-
-aiou/
-**/application.yaml
-**/application.yml
 
 # OS / logs / temp
 .DS_Store
@@ -24,6 +21,7 @@ Thumbs.db
 
 # Data and local runtime assets
 /data/
+/tmp/
 
 # Frontend
 mmdp-frontend/node_modules/
@@ -31,9 +29,11 @@ mmdp-frontend/dist/
 mmdp-frontend/.vite/
 mmdp-frontend/.cache/
 
-# ML models
-freestyle/
-
 # Backend
 mmdp-backend/target/
 mmdp-backend/.m2/
+
+# Deploy artifacts
+deploy/.env
+deploy/backend/*.jar
+deploy/frontend/dist/

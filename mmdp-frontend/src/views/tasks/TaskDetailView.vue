@@ -202,12 +202,26 @@
                 <div class="font-medium tracking-[0.14em] text-slate-400">当前选择</div>
                 <div class="mt-1 text-sm font-medium text-slate-900">{{ selectedFile?.name ?? "尚未选择文件" }}</div>
                 <div class="mt-1">{{ selectedFile ? formatFileSize(selectedFile.size) : "上传后会自动刷新资产、处理记录、质量检查和数据链路。" }}</div>
+                <div v-if="uploading" class="mt-2">
+                  <div class="h-2 overflow-hidden rounded-full bg-slate-200">
+                    <div class="h-full bg-[var(--color-brand-500)] transition-all" :style="{ width: `${uploadProgress}%` }" />
+                  </div>
+                  <div class="mt-1 text-[11px] text-slate-500">上传进度：{{ uploadProgress }}%</div>
+                </div>
               </div>
             </div>
 
             <div class="mt-4 flex items-center gap-3">
               <BaseButton variant="primary" :disabled="!selectedFile || uploading" @click="submitUpload">
                 {{ uploading ? "正在接入..." : "开始接入" }}
+              </BaseButton>
+              <BaseButton
+                v-if="pendingCompleteFileId"
+                variant="ghost"
+                :disabled="uploading"
+                @click="retryPendingComplete"
+              >
+                重试完成登记
               </BaseButton>
               <span v-if="uploadMessage" :class="uploadSuccess ? 'text-emerald-700' : 'text-rose-700'" class="text-xs">
                 {{ uploadMessage }}
@@ -1087,7 +1101,7 @@ import {
   fetchTaskLineage,
   fetchTaskProcessingJobs
 } from "@/api/processing";
-import { fetchTask, fetchTaskFiles, uploadTaskFile } from "@/api/tasks";
+import { fetchTask, fetchTaskFiles } from "@/api/tasks";
 import AppDrawer from "@/components/AppDrawer.vue";
 import BaseButton from "@/components/BaseButton.vue";
 import DataTableShell from "@/components/DataTableShell.vue";
@@ -1107,6 +1121,7 @@ import type {
   TaskLineageResponse
 } from "@/types/processing";
 import type { TaskResponse } from "@/types/task";
+import { DirectUploadCompletionError, directUploadToOss, retryDirectUploadCompletion } from "@/utils/ossDirectUpload";
 import { formatDateTime, formatFileSize, formatStatusLabel } from "@/utils/format";
 
 type MainTabKey = "overview" | "assets" | "processing" | "quality" | "lineage";
@@ -1173,8 +1188,10 @@ const selectedAssetId = ref<number | null>(null);
 const selectedFile = ref<File | null>(null);
 const selectedUploadAssetType = ref<AssetType>("OTHER");
 const uploading = ref(false);
+const uploadProgress = ref(0);
 const uploadMessage = ref("");
 const uploadSuccess = ref(false);
+const pendingCompleteFileId = ref<number | null>(null);
 
 const submittingExternalAsset = ref(false);
 const externalAssetMessage = ref("");
@@ -1524,16 +1541,51 @@ async function submitUpload() {
     return;
   }
   uploading.value = true;
+  uploadProgress.value = 0;
   uploadMessage.value = "";
+  pendingCompleteFileId.value = null;
   try {
-    const result = await uploadTaskFile(taskId, selectedFile.value, selectedUploadAssetType.value);
+    await directUploadToOss({
+      taskId,
+      file: selectedFile.value,
+      assetType: selectedUploadAssetType.value,
+      onProgress: (percent) => {
+        uploadProgress.value = percent;
+      },
+    });
     uploadSuccess.value = true;
-    uploadMessage.value = `接入成功：${result.summary}`;
+    uploadMessage.value = "接入成功：文件已直传 OSS 并完成平台登记";
     selectedFile.value = null;
     await refreshTaskWorkspace();
   } catch (error) {
     uploadSuccess.value = false;
-    uploadMessage.value = error instanceof Error ? error.message : "平台上传失败";
+    if (error instanceof DirectUploadCompletionError) {
+      pendingCompleteFileId.value = error.fileId;
+      uploadMessage.value = "文件已上传到 OSS，但平台登记失败，可重试完成登记";
+    } else {
+      uploadMessage.value = error instanceof Error ? error.message : "平台上传失败";
+    }
+  } finally {
+    uploading.value = false;
+  }
+}
+
+async function retryPendingComplete() {
+  if (!pendingCompleteFileId.value) {
+    return;
+  }
+  uploading.value = true;
+  uploadMessage.value = "";
+  try {
+    await retryDirectUploadCompletion(pendingCompleteFileId.value);
+    pendingCompleteFileId.value = null;
+    uploadSuccess.value = true;
+    uploadMessage.value = "平台登记已完成";
+    selectedFile.value = null;
+    await refreshTaskWorkspace();
+  } catch (error) {
+    uploadSuccess.value = false;
+    uploadMessage.value = error instanceof Error ? error.message : "完成登记失败";
   } finally {
     uploading.value = false;
   }

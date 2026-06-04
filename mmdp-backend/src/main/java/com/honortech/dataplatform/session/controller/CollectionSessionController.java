@@ -1,10 +1,17 @@
 package com.honortech.dataplatform.session.controller;
 
 import com.honortech.dataplatform.common.api.ApiResponse;
+import com.honortech.dataplatform.common.dto.PageResponse;
+import com.honortech.dataplatform.session.dto.SessionListItemResponse;
+import com.honortech.dataplatform.session.dto.SessionListQueryRequest;
 import com.honortech.dataplatform.session.dto.SessionPlaybackResponse;
 import com.honortech.dataplatform.session.dto.SessionResponse;
 import com.honortech.dataplatform.session.entity.CollectionSession;
 import com.honortech.dataplatform.session.service.CollectionSessionService;
+import com.honortech.dataplatform.sessionimport.dto.SessionImportRequestContext;
+import com.honortech.dataplatform.sessionimport.dto.SessionImportResponse;
+import com.honortech.dataplatform.sessionimport.service.SessionImportService;
+import com.honortech.dataplatform.sessionimport.service.SessionImportServiceImpl;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,22 +25,35 @@ import java.util.List;
 public class CollectionSessionController {
 
     private final CollectionSessionService sessionService;
+    private final SessionImportService sessionImportService;
 
-    public CollectionSessionController(CollectionSessionService sessionService) {
+    public CollectionSessionController(CollectionSessionService sessionService, SessionImportService sessionImportService) {
         this.sessionService = sessionService;
+        this.sessionImportService = sessionImportService;
     }
 
+    @Deprecated
     @PostMapping("/api/tasks/{taskId}/sessions/import")
-    public ApiResponse<SessionResponse> importSession(
+    public ApiResponse<SessionImportResponse> importSession(
             @PathVariable Long taskId,
             @RequestPart("manifest") MultipartFile manifest,
             @RequestPart("files") List<MultipartFile> files) {
-        return ApiResponse.success("Session imported", sessionService.importSession(taskId, manifest, files));
+        SessionImportResponse response = sessionImportService.importSession(
+                new SessionImportRequestContext(
+                        SessionImportServiceImpl.SOURCE_ENDPOINT_LEGACY_TASK_ROUTE,
+                        taskId,
+                        manifest,
+                        null,
+                        files
+                )
+        );
+        return ApiResponse.success(response.existing() ? "Session already imported" : "Session imported", response);
     }
 
     @GetMapping("/api/sessions")
-    public ApiResponse<List<SessionResponse>> listAllSessions() {
-        return ApiResponse.success(sessionService.listAll());
+    public ApiResponse<PageResponse<SessionListItemResponse>> listAllSessions(SessionListQueryRequest request) {
+        var page = sessionService.listPage(request);
+        return ApiResponse.success(PageResponse.of(page, page.getRecords()));
     }
 
     @GetMapping("/api/tasks/{taskId}/sessions")

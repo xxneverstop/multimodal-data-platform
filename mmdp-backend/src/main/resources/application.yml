@@ -4,15 +4,18 @@ server:
 spring:
   application:
     name: mmdp-backend
+  config:
+    import: optional:file:.env[.properties]
   datasource:
-    url: jdbc:mysql://127.0.0.1:13306/mmdp_db?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
-    username: root
-    password: 123123
+    url: ${MMDP_DB_URL:jdbc:mysql://127.0.0.1:13306/mmdp_db?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
+    username: ${MMDP_DB_USERNAME:root}
+    password: ${MMDP_DB_PASSWORD:123123}
     driver-class-name: com.mysql.cj.jdbc.Driver
+
   servlet:
     multipart:
-      max-file-size: 200MB
-      max-request-size: 200MB
+      max-file-size: 1024MB
+      max-request-size: 1024MB
 
 mybatis-plus:
   configuration:
@@ -23,8 +26,14 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
 
-minio:
-  endpoint: http://127.0.0.1:29010
-  access-key: admin
-  secret-key: 123123123
-  bucket: mmdp-test
+storage:
+  default-provider: ${MMDP_STORAGE_DEFAULT_PROVIDER:OSS}
+  oss:
+    endpoint: ${MMDP_OSS_ENDPOINT}
+    access-key-id: ${MMDP_OSS_ACCESS_KEY_ID}
+    access-key-secret: ${MMDP_OSS_ACCESS_KEY_SECRET}
+    bucket: ${MMDP_OSS_BUCKET}
+    region: ${MMDP_OSS_REGION}
+    sts-role-arn: ${MMDP_OSS_STS_ROLE_ARN:}
+    sts-role-session-name: ${MMDP_OSS_STS_ROLE_SESSION_NAME:mmdp-direct-upload}
+    sts-duration-seconds: ${MMDP_OSS_STS_DURATION_SECONDS:900}

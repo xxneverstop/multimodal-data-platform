@@ -7,10 +7,12 @@ import java.time.LocalDate;
 
 public record CreateTaskRequest(
         @NotBlank String taskName,
-        @NotBlank String subjectCode,
+        String subjectCode,
+        String subjectName,
         @NotBlank String actionName,
-        @NotBlank String deviceType,
-        @NotBlank String modality,
+        Long profileId,
+        String deviceType,
+        String modality,
         @NotNull LocalDate collectDate,
         String scene,
         String operatorName,
