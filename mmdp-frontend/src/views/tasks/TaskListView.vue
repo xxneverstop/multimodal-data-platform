@@ -100,14 +100,14 @@ const loading = ref(false);
 const errorMessage = ref("");
 
 const taskPage = reactive<TaskPageResponse>({
-  current: 1,
-  size: 10,
+  page: 1,
+  pageSize: 10,
   total: 0,
   records: []
 });
 
 const headerMeta = computed(() => [
-  { label: "当前页", value: taskPage.current },
+  { label: "当前页", value: taskPage.page },
   { label: "返回记录", value: taskPage.records.length },
   { label: "任务总数", value: taskPage.total || taskPage.records.length }
 ]);

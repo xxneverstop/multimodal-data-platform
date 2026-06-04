@@ -5,6 +5,7 @@ import com.honortech.dataplatform.common.exception.BizException;
 import java.util.Locale;
 
 public enum AssetType {
+    SESSION_ARCHIVE_ZIP,
     RGB_SEQ_RAW,
     RGB_VIDEO_MP4,
     MOCAP_CSV,

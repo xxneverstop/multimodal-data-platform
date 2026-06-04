@@ -10,16 +10,16 @@
 
 ## 技术要求
 
-使用 Spring Boot 3、MyBatis-Plus、MySQL、MinIO SDK。项目包名使用：
+使用 Spring Boot 3、MyBatis-Plus、MySQL、OSS SDK。项目包名使用：
 
 com.honortech.dataplatform
 
-请实现统一返回结果、统一异常处理、基础参数校验、数据库表结构 SQL、MinIO 配置类、任务管理接口、文件上传接口、基础质检服务、质检报告查询接口。
+请实现统一返回结果、统一异常处理、基础参数校验、数据库表结构 SQL、OSS 配置类、任务管理接口、文件上传接口、基础质检服务、质检报告查询接口。
 
 ## 需要创建的核心模块
 
 1. acquisition task 模块：负责采集任务创建、查询、状态更新。
-2. data file 模块：负责文件元数据记录和 MinIO 上传。
+2. data file 模块：负责文件元数据记录和 OSS 上传。
 3. qc report 模块：负责基础质检和报告保存。
 4. common 模块：统一返回、异常处理、枚举、工具类。
 
@@ -70,6 +70,6 @@ com.honortech.dataplatform
 2. 数据库 schema.sql
 3. application.yml 示例配置
 4. 核心 Entity、Mapper、Service、Controller
-5. MinIO 上传工具类
+5. OSS 上传工具类
 6. 基础质检服务
 7. 简单 README，说明如何启动、如何测试接口

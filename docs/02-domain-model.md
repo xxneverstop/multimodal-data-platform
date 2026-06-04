@@ -20,7 +20,7 @@
 
 ## 2. data_file 数据文件表
 
-用于记录上传文件的元数据，真实文件存储在 MinIO。
+用于记录上传文件的元数据，真实文件存储在 OSS。
 
 字段建议：
 
@@ -30,8 +30,8 @@
 - file_ext：文件扩展名
 - content_type：文件 MIME 类型
 - file_size：文件大小，单位 byte
-- bucket_name：MinIO bucket
-- object_key：MinIO 对象路径
+- bucket_name：OSS bucket
+- object_key：OSS 对象路径
 - storage_url：内部访问路径或对象标识
 - upload_status：上传状态，SUCCESS、FAILED
 - created_at：创建时间

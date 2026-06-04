@@ -90,7 +90,7 @@
       <!-- Loading progress bar (bottom, shown while resources load) -->
       <div v-if="!allLoaded" class="load-progress-bar">
         <div class="load-progress-text">
-          <span>正在从 MinIO 加载数据...</span>
+          <span>正在从 OSS 加载数据...</span>
           <span>{{ loadedResources }} / {{ totalResources }} ({{ loadProgress }}%)</span>
         </div>
         <div class="load-progress-track">

@@ -1,63 +1,76 @@
 <template>
   <div class="space-y-5">
     <PageHeader
-      eyebrow="任务建档"
-      title="新建任务"
-      description="录入采集任务基础元数据。任务本身只承载采集上下文，资产接入、处理记录、质量检查与数据链路在任务详情页继续完成。"
+      eyebrow="Task Create"
+      title="Create Task"
+      description="The task stores business context. The profile controls packaging, parsing, archiving, and playback rules."
       :meta="headerMeta"
     >
       <template #actions>
-        <BaseButton to="/tasks">返回任务列表</BaseButton>
+        <BaseButton to="/tasks">Back to Tasks</BaseButton>
       </template>
     </PageHeader>
 
     <div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <PageCard eyebrow="基础信息" title="任务信息" description="保持任务命名稳定，便于后续资产登记、处理记录和质量检查追踪。">
+      <PageCard eyebrow="Basics" title="Task Info" description="Pick a profile first, then derive device and modality from it.">
         <form class="grid gap-4 md:grid-cols-2" @submit.prevent="handleSubmit">
           <label class="block">
-            <span class="mb-1.5 block text-sm font-medium text-slate-700">任务名称</span>
-            <input v-model="form.taskName" required class="app-input" placeholder="例如：步态采集第 02 批" />
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Task Name</span>
+            <input v-model="form.taskName" required class="app-input" placeholder="e.g. gait-batch-02" />
           </label>
           <label class="block">
-            <span class="mb-1.5 block text-sm font-medium text-slate-700">被试编号</span>
-            <input v-model="form.subjectCode" required class="app-input" placeholder="例如：S-0021" />
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Operator</span>
+            <input v-model="form.operatorName" class="app-input" placeholder="e.g. operator-a" />
           </label>
           <label class="block">
-            <span class="mb-1.5 block text-sm font-medium text-slate-700">动作名称</span>
-            <input v-model="form.actionName" required class="app-input" placeholder="例如：行走" />
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Subject Name</span>
+            <input v-model="form.subjectName" class="app-input" placeholder="e.g. subject-a" />
           </label>
           <label class="block">
-            <span class="mb-1.5 block text-sm font-medium text-slate-700">设备类型</span>
-            <input v-model="form.deviceType" required class="app-input" placeholder="例如：IMU_CLOTH" />
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Subject Code (optional)</span>
+            <input v-model="form.subjectCode" class="app-input" placeholder="leave blank to auto-generate" />
           </label>
           <label class="block">
-            <span class="mb-1.5 block text-sm font-medium text-slate-700">数据模态</span>
-            <input v-model="form.modality" required class="app-input" placeholder="例如：IMU" />
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Action Name</span>
+            <input v-model="form.actionName" required class="app-input" placeholder="e.g. walking" />
           </label>
           <label class="block">
-            <span class="mb-1.5 block text-sm font-medium text-slate-700">采集日期</span>
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Collect Date</span>
             <input v-model="form.collectDate" type="date" required class="app-input" />
           </label>
-          <label class="block">
-            <span class="mb-1.5 block text-sm font-medium text-slate-700">场景</span>
-            <input v-model="form.scene" class="app-input" placeholder="例如：RGB 与动捕联合采集" />
+          <label class="block md:col-span-2">
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Collection Profile</span>
+            <select v-model="profileIdValue" required class="app-input">
+              <option :value="''" disabled>Select a profile</option>
+              <option v-for="profile in profiles" :key="profile.id" :value="String(profile.id)">
+                {{ profile.profileName }} ({{ profile.profileCode }})
+              </option>
+            </select>
           </label>
           <label class="block">
-            <span class="mb-1.5 block text-sm font-medium text-slate-700">采集人员</span>
-            <input v-model="form.operatorName" class="app-input" placeholder="例如：实验员 A" />
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Device Group</span>
+            <input :value="selectedProfile?.deviceGroupCode || ''" readonly class="app-input bg-slate-50 text-slate-500" placeholder="derived from profile" />
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Modality Group</span>
+            <input :value="selectedProfile?.modalityGroupCode || ''" readonly class="app-input bg-slate-50 text-slate-500" placeholder="derived from profile" />
           </label>
           <label class="block md:col-span-2">
-            <span class="mb-1.5 block text-sm font-medium text-slate-700">采集地点</span>
-            <input v-model="form.captureLocation" class="app-input" placeholder="例如：动捕棚一区 / 存储节点一" />
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Capture Location</span>
+            <input v-model="form.captureLocation" class="app-input" placeholder="e.g. lab-a / motion-zone-1" />
           </label>
           <label class="block md:col-span-2">
-            <span class="mb-1.5 block text-sm font-medium text-slate-700">备注</span>
-            <textarea v-model="form.remark" rows="4" class="app-input resize-y" placeholder="补充采集场景、批次说明或其他备注"></textarea>
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Scene</span>
+            <input v-model="form.scene" class="app-input" placeholder="optional" />
+          </label>
+          <label class="block md:col-span-2">
+            <span class="mb-1.5 block text-sm font-medium text-slate-700">Remark</span>
+            <textarea v-model="form.remark" rows="4" class="app-input resize-y" placeholder="task context"></textarea>
           </label>
 
           <div class="flex items-center gap-3 md:col-span-2">
-            <BaseButton variant="primary" type="submit" :disabled="submitting">
-              {{ submitting ? "正在创建任务..." : "创建任务" }}
+            <BaseButton variant="primary" type="submit" :disabled="submitting || loadingProfiles">
+              {{ submitting ? "Creating..." : "Create Task" }}
             </BaseButton>
             <span v-if="errorMessage" class="text-xs text-rose-700">{{ errorMessage }}</span>
           </div>
@@ -65,16 +78,16 @@
       </PageCard>
 
       <PageCard
-        eyebrow="填写建议"
-        title="建档提示"
-        description="任务页面只记录采集上下文，不在这里决定处理流程。"
+        eyebrow="Rules"
+        title="Profile Notes"
+        description="Add new profiles and resolver implementations for new multimodal combinations instead of expanding task fields."
         secondary
       >
         <ul class="space-y-3 text-xs leading-5 text-slate-500">
-          <li>任务名称建议包含动作、场景或批次信息，便于后续资产、处理记录与链路追踪。</li>
-          <li>动作名称尽量保持统一命名，例如“行走”“左转”“云手”。</li>
-          <li>创建完成后，建议直接进入任务详情页，继续完成平台上传、外部登记、处理记录和数据链路查看。</li>
-          <li>当前阶段的主要操作页面是任务详情页，资产接入、质量检查和处理作业都在详情页完成。</li>
+          <li>One profile maps to one end-to-end collection rule set.</li>
+          <li>The task page stores business context only.</li>
+          <li>Subject code can be blank and will be generated by the backend.</li>
+          <li>Device and modality are display-only to keep rules consistent.</li>
         </ul>
       </PageCard>
     </div>
@@ -82,8 +95,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
+import { fetchCollectionProfiles, type CollectionProfileResponse } from "@/api/profiles";
 import { createTask } from "@/api/tasks";
 import BaseButton from "@/components/BaseButton.vue";
 import PageCard from "@/components/PageCard.vue";
@@ -92,14 +106,19 @@ import type { CreateTaskRequest } from "@/types/task";
 
 const router = useRouter();
 const submitting = ref(false);
+const loadingProfiles = ref(false);
 const errorMessage = ref("");
+const profiles = ref<CollectionProfileResponse[]>([]);
+const profileIdValue = ref("");
 
 const form = reactive<CreateTaskRequest>({
   taskName: "",
   subjectCode: "",
+  subjectName: "",
   actionName: "",
-  deviceType: "IMU_CLOTH",
-  modality: "IMU",
+  profileId: null,
+  deviceType: "",
+  modality: "",
   collectDate: "",
   scene: "",
   operatorName: "",
@@ -107,21 +126,47 @@ const form = reactive<CreateTaskRequest>({
   remark: ""
 });
 
+const selectedProfile = computed(() => profiles.value.find((profile) => String(profile.id) === profileIdValue.value) ?? null);
+
 const headerMeta = computed(() => [
-  { label: "默认设备", value: form.deviceType },
-  { label: "默认模态", value: form.modality }
+  { label: "Profile", value: selectedProfile.value?.profileCode || "not selected" },
+  { label: "Device", value: selectedProfile.value?.deviceGroupCode || "-" },
+  { label: "Modality", value: selectedProfile.value?.modalityGroupCode || "-" }
 ]);
 
+async function loadProfiles() {
+  loadingProfiles.value = true;
+  try {
+    profiles.value = await fetchCollectionProfiles();
+    if (profiles.value.length > 0) {
+      profileIdValue.value = String(profiles.value[0].id);
+    }
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : "Failed to load profiles";
+  } finally {
+    loadingProfiles.value = false;
+  }
+}
+
 async function handleSubmit() {
+  if (!selectedProfile.value) {
+    errorMessage.value = "Please select a profile";
+    return;
+  }
   submitting.value = true;
   errorMessage.value = "";
   try {
+    form.profileId = selectedProfile.value.id;
+    form.deviceType = selectedProfile.value.deviceGroupCode;
+    form.modality = selectedProfile.value.modalityGroupCode;
     const task = await createTask(form);
     await router.push(`/tasks/${task.id}`);
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "创建任务失败";
+    errorMessage.value = error instanceof Error ? error.message : "Failed to create task";
   } finally {
     submitting.value = false;
   }
 }
+
+onMounted(loadProfiles);
 </script>

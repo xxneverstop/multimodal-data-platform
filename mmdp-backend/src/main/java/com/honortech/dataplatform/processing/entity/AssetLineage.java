@@ -12,6 +12,7 @@ public class AssetLineage {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long taskId;
+    private Long sessionId;
     private Long sourceAssetId;
     private Long targetAssetId;
     private Long jobId;
@@ -32,6 +33,14 @@ public class AssetLineage {
 
     public void setTaskId(Long taskId) {
         this.taskId = taskId;
+    }
+
+    public Long getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(Long sessionId) {
+        this.sessionId = sessionId;
     }
 
     public Long getSourceAssetId() {

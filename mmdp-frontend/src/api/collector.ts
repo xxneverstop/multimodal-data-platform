@@ -15,8 +15,12 @@ export interface CollectorDevice {
 
 export interface StartSessionParams {
   taskId: string;
+  taskName?: string;
   subjectCode: string;
+  subjectName?: string;
   actionName: string;
+  profileCode?: string;
+  profileName?: string;
 }
 
 // ── Source status types ─────────────────────────────────────────────────
@@ -55,6 +59,8 @@ export interface RealtimeStatus {
   actionName?: string;
   running: boolean;
   elapsedMs: number;
+  sessionPhase?: string;
+  pendingAction?: string;
   sources: {
     left: VideoSourceStatus;
     right: VideoSourceStatus;
@@ -86,6 +92,16 @@ export async function stopSession() {
   return data;
 }
 
+export async function saveSession() {
+  const { data } = await collectorHttp.post("/session/save");
+  return data;
+}
+
+export async function discardSession() {
+  const { data } = await collectorHttp.post("/session/discard");
+  return data;
+}
+
 export async function fetchCurrentSession(): Promise<RealtimeStatus> {
   const { data } = await collectorHttp.get("/session/current");
   return data;
@@ -103,8 +119,8 @@ export function streamUrl(source: "left" | "right" | "hmd"): string {
 
 export interface UploadParams {
   platformUrl: string;
-  taskId: number;
   sessionId?: string;
+  platformTaskId?: number;
 }
 
 export interface UploadResult {

@@ -12,7 +12,9 @@ public class DataAsset {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long taskId;
+    private Long sessionId;
     private String sourceType;
+    private String sourceKey;
     private String assetType;
     private String displayName;
     private Long fileId;
@@ -40,12 +42,28 @@ public class DataAsset {
         this.taskId = taskId;
     }
 
+    public Long getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(Long sessionId) {
+        this.sessionId = sessionId;
+    }
+
     public String getSourceType() {
         return sourceType;
     }
 
     public void setSourceType(String sourceType) {
         this.sourceType = sourceType;
+    }
+
+    public String getSourceKey() {
+        return sourceKey;
+    }
+
+    public void setSourceKey(String sourceKey) {
+        this.sourceKey = sourceKey;
     }
 
     public String getAssetType() {

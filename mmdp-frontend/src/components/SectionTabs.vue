@@ -1,11 +1,15 @@
 <template>
-  <div class="flex flex-wrap gap-1 border-b border-slate-200">
+  <div class="flex flex-wrap border-b border-[var(--color-border-default)]">
     <button
       v-for="item in items"
       :key="item.value"
       type="button"
-      class="rounded-t-[8px] border border-b-0 px-3 py-1.5 text-sm transition"
-      :class="modelValue === item.value ? 'border-slate-200 bg-white font-medium text-slate-900' : 'border-transparent bg-transparent text-slate-500 hover:text-slate-900'"
+      class="relative -mb-px rounded-none border-0 bg-transparent px-3 py-2 text-[13px] leading-5 transition-colors duration-150 focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_rgba(9,105,218,0.25)]"
+      :class="
+        modelValue === item.value
+          ? 'border-b-2 border-b-[var(--color-brand-500)] font-semibold text-[var(--color-text-primary)]'
+          : 'border-b-2 border-b-transparent font-normal text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-subtle)] hover:text-[var(--color-text-primary)]'
+      "
       @click="$emit('update:modelValue', item.value)"
     >
       {{ item.label }}

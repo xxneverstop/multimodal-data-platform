@@ -13,8 +13,11 @@ public class AcquisitionTask {
 
     @TableId(type = IdType.AUTO)
     private Long id;
+    private String taskCode;
     private String taskName;
+    private Long subjectId;
     private String subjectCode;
+    private String subjectCodeSnapshot;
     private String actionName;
     private String deviceType;
     private String modality;
@@ -22,6 +25,9 @@ public class AcquisitionTask {
     private String scene;
     private String operatorName;
     private String captureLocation;
+    private Long profileId;
+    private String taskSource;
+    private Long collectorClientId;
     private String status;
     private String remark;
     private LocalDateTime createdAt;
@@ -45,12 +51,36 @@ public class AcquisitionTask {
         this.taskName = taskName;
     }
 
+    public String getTaskCode() {
+        return taskCode;
+    }
+
+    public void setTaskCode(String taskCode) {
+        this.taskCode = taskCode;
+    }
+
+    public Long getSubjectId() {
+        return subjectId;
+    }
+
+    public void setSubjectId(Long subjectId) {
+        this.subjectId = subjectId;
+    }
+
     public String getSubjectCode() {
         return subjectCode;
     }
 
     public void setSubjectCode(String subjectCode) {
         this.subjectCode = subjectCode;
+    }
+
+    public String getSubjectCodeSnapshot() {
+        return subjectCodeSnapshot;
+    }
+
+    public void setSubjectCodeSnapshot(String subjectCodeSnapshot) {
+        this.subjectCodeSnapshot = subjectCodeSnapshot;
     }
 
     public String getActionName() {
@@ -107,6 +137,30 @@ public class AcquisitionTask {
 
     public void setCaptureLocation(String captureLocation) {
         this.captureLocation = captureLocation;
+    }
+
+    public Long getProfileId() {
+        return profileId;
+    }
+
+    public void setProfileId(Long profileId) {
+        this.profileId = profileId;
+    }
+
+    public String getTaskSource() {
+        return taskSource;
+    }
+
+    public void setTaskSource(String taskSource) {
+        this.taskSource = taskSource;
+    }
+
+    public Long getCollectorClientId() {
+        return collectorClientId;
+    }
+
+    public void setCollectorClientId(Long collectorClientId) {
+        this.collectorClientId = collectorClientId;
     }
 
     public String getStatus() {

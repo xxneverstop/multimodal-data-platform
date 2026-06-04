@@ -12,10 +12,17 @@ public class DataFile {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long taskId;
+    private Long sessionId;
+    private String fileRole;
+    private String sourceKey;
     private String originalFilename;
+    private String relativePath;
     private String fileExt;
     private String contentType;
     private Long fileSize;
+    private String sha256;
+    private String assetType;
+    private String storageProvider;
     private String bucketName;
     private String objectKey;
     private String storageUrl;
@@ -38,12 +45,44 @@ public class DataFile {
         this.taskId = taskId;
     }
 
+    public Long getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(Long sessionId) {
+        this.sessionId = sessionId;
+    }
+
+    public String getFileRole() {
+        return fileRole;
+    }
+
+    public void setFileRole(String fileRole) {
+        this.fileRole = fileRole;
+    }
+
+    public String getSourceKey() {
+        return sourceKey;
+    }
+
+    public void setSourceKey(String sourceKey) {
+        this.sourceKey = sourceKey;
+    }
+
     public String getOriginalFilename() {
         return originalFilename;
     }
 
     public void setOriginalFilename(String originalFilename) {
         this.originalFilename = originalFilename;
+    }
+
+    public String getRelativePath() {
+        return relativePath;
+    }
+
+    public void setRelativePath(String relativePath) {
+        this.relativePath = relativePath;
     }
 
     public String getFileExt() {
@@ -68,6 +107,30 @@ public class DataFile {
 
     public void setFileSize(Long fileSize) {
         this.fileSize = fileSize;
+    }
+
+    public String getSha256() {
+        return sha256;
+    }
+
+    public void setSha256(String sha256) {
+        this.sha256 = sha256;
+    }
+
+    public String getAssetType() {
+        return assetType;
+    }
+
+    public void setAssetType(String assetType) {
+        this.assetType = assetType;
+    }
+
+    public String getStorageProvider() {
+        return storageProvider;
+    }
+
+    public void setStorageProvider(String storageProvider) {
+        this.storageProvider = storageProvider;
     }
 
     public String getBucketName() {

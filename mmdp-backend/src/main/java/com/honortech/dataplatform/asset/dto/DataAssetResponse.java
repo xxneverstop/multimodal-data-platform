@@ -5,7 +5,9 @@ import java.time.LocalDateTime;
 public record DataAssetResponse(
         Long id,
         Long taskId,
+        Long sessionId,
         String sourceType,
+        String sourceKey,
         String assetType,
         String displayName,
         Long fileId,

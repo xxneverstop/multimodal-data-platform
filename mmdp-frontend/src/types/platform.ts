@@ -4,12 +4,16 @@ import type { QcReportResponse } from "@/types/qc";
 import type { TaskResponse } from "@/types/task";
 
 export interface SessionRecord {
+  id: number | null;
   sessionId: string;
+  sessionCode?: string | null;
   taskId: number;
   taskName: string;
   sessionName: string;
   subjectCode: string;
   actionName: string;
+  profileCode?: string | null;
+  profileName?: string | null;
   deviceSummary: string;
   modality: string;
   operatorName: string;
@@ -17,8 +21,16 @@ export interface SessionRecord {
   dataStatus: string;
   processingStatus: string;
   qcStatus: string;
+  uploadStatus: string;
+  exportStatus: string;
   assetCount: number;
+  fileCount: number;
+  totalSize: number;
   createdAt: string;
+  startedAt?: string | null;
+  endedAt?: string | null;
+  durationMs?: number | null;
+  sourceSummary: string;
 }
 
 export interface AssetListItem {
@@ -44,6 +56,34 @@ export interface AssetListItem {
   rawAsset: DataAssetResponse;
 }
 
+export interface SessionDataGroup {
+  key: string;
+  title: string;
+  sourceType: AssetListItem["sourceType"];
+  assetTypes: string[];
+  assetCount: number;
+  fileCount: number;
+  totalSize: number;
+  assets: AssetListItem[];
+}
+
+export interface SessionQcResult {
+  sessionId: string;
+  taskId: number;
+  overallStatus: string;
+  fileResultCount: number;
+  checkedAssetCount: number;
+  note: string;
+  fileResults: QcReportResponse[];
+}
+
+export interface QcRuleBinding {
+  id: string;
+  scopeType: "profile" | "session" | "upload";
+  scopeLabel: string;
+  enabled: boolean;
+}
+
 export interface AssetDetailViewModel {
   asset: AssetListItem;
   task: TaskResponse | null;
@@ -65,9 +105,12 @@ export interface AcquisitionDetailViewModel {
 export interface SessionDetailViewModel {
   session: SessionRecord;
   task: TaskResponse | null;
+  groups: SessionDataGroup[];
   assets: AssetListItem[];
   jobs: ProcessingJobResponse[];
   reports: QcReportResponse[];
+  qcSummary: SessionQcResult;
+  metadata: Array<{ label: string; value: string }>;
 }
 
 export interface ProcessingTemplateRecord {
@@ -99,11 +142,15 @@ export interface AnnotationTaskRecord {
 export interface QcRuleRecord {
   id: string;
   name: string;
-  templateName: string;
-  scope: string;
-  taskId: number | null;
-  sessionId: string | null;
-  status: string;
+  ruleType: "FILE" | "SESSION";
+  appliesTo: string;
+  profileCode?: string | null;
+  sourceKey?: string | null;
+  assetType?: string | null;
+  enabled: boolean;
+  priority: number;
+  executionMode: "placeholder" | "active";
+  bindings: QcRuleBinding[];
   updatedAt: string;
 }
 
@@ -120,18 +167,20 @@ export interface QcLogRecord {
 }
 
 export interface FinalAssetRecord {
-  id: number;
-  taskId: number;
   sessionId: string;
-  assetName: string;
-  assetType: string;
-  modality: string;
-  fileFormat: string;
-  processingStatus: string;
-  annotationStatus: string;
+  sessionCode?: string | null;
+  taskId: number;
+  taskName: string;
+  subjectCode: string;
+  actionName: string;
+  assetCount: number;
+  fileCount: number;
+  totalSize: number;
   qcStatus: string;
   deliverableStatus: string;
+  exportStatus: string;
   updatedAt: string;
+  assets: AssetListItem[];
 }
 
 export interface OverviewDistributionItem {

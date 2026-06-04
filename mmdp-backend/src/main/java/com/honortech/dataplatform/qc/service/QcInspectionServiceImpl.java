@@ -22,7 +22,8 @@ import java.util.regex.Pattern;
 @Service
 public class QcInspectionServiceImpl implements QcInspectionService {
 
-    private static final List<String> SUPPORTED_EXTENSIONS = List.of("txt", "csv", "json", "bvh", "fbx");
+    private static final List<String> SUPPORTED_EXTENSIONS = List.of(
+            "txt", "csv", "json", "bvh", "fbx", "mp4", "jpg", "png", "hdf5", "h5", "npz", "wav");
     private static final Pattern TIMESTAMP_PATTERN =
             Pattern.compile("^\\d{4}-\\d{2}-\\d{2}[- T]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$");
 
@@ -57,6 +58,19 @@ public class QcInspectionServiceImpl implements QcInspectionService {
         } else if ("json".equalsIgnoreCase(fileExt)) {
             detectedFormat = "json";
             inspectJson(content, checks, warnings, errors, previewLines);
+        } else if ("jpg".equalsIgnoreCase(fileExt) || "jpeg".equalsIgnoreCase(fileExt)
+                || "png".equalsIgnoreCase(fileExt)) {
+            detectedFormat = "image";
+            inspectImage(fileExt, content, checks, warnings, errors);
+        } else if ("hdf5".equalsIgnoreCase(fileExt) || "h5".equalsIgnoreCase(fileExt)) {
+            detectedFormat = "hdf5";
+            inspectHdf5(content, checks, warnings, errors);
+        } else if ("wav".equalsIgnoreCase(fileExt)) {
+            detectedFormat = "wav";
+            inspectWav(content, checks, warnings, errors);
+        } else if ("npz".equalsIgnoreCase(fileExt)) {
+            detectedFormat = "npz";
+            inspectNpz(content, checks, warnings, errors);
         } else {
             warnings.add("File content inspection is limited for extension: " + fileExt);
             checks.add(new QcCheckResult("supportedExtension", evaluateExtension(fileExt).name(), extensionMessage(fileExt)));
@@ -327,7 +341,9 @@ public class QcInspectionServiceImpl implements QcInspectionService {
             errors.add("RGB_VIDEO_MP4 must use mp4 extension");
         }
 
-        boolean contentTypeMatches = contentType != null && (contentType.equalsIgnoreCase("video/mp4") || contentType.equalsIgnoreCase("application/octet-stream"));
+        boolean contentTypeMatches = contentType != null
+                && (contentType.equalsIgnoreCase("video/mp4")
+                || contentType.equalsIgnoreCase("application/octet-stream"));
         checks.add(new QcCheckResult(
                 "videoContentType",
                 contentTypeMatches ? QcStatus.PASSED.name() : QcStatus.WARNING.name(),
@@ -341,7 +357,107 @@ public class QcInspectionServiceImpl implements QcInspectionService {
             checks.add(new QcCheckResult("videoFileSize", QcStatus.WARNING.name(), "Video file is unusually small"));
             warnings.add("RGB_VIDEO_MP4 file is unusually small");
         } else {
-            checks.add(new QcCheckResult("videoFileSize", QcStatus.PASSED.name(), "Video file size is within MVP threshold"));
+            checks.add(new QcCheckResult("videoFileSize", QcStatus.PASSED.name(),
+                    "Video file size is within MVP threshold"));
+        }
+    }
+
+    private void inspectImage(
+            String fileExt,
+            byte[] content,
+            List<QcCheckResult> checks,
+            List<String> warnings,
+            List<String> errors) {
+        // Check magic bytes for common image formats
+        boolean validMagic = false;
+        String expectedMagic = "";
+        if ("jpg".equalsIgnoreCase(fileExt) || "jpeg".equalsIgnoreCase(fileExt)) {
+            expectedMagic = "FF D8 FF";
+            validMagic = content.length >= 3
+                    && (content[0] & 0xFF) == 0xFF && (content[1] & 0xFF) == 0xD8
+                    && (content[2] & 0xFF) == 0xFF;
+        } else if ("png".equalsIgnoreCase(fileExt)) {
+            expectedMagic = "89 50 4E 47";
+            validMagic = content.length >= 4
+                    && (content[0] & 0xFF) == 0x89 && content[1] == 'P'
+                    && content[2] == 'N' && content[3] == 'G';
+        }
+        checks.add(new QcCheckResult(
+                "imageMagicBytes",
+                validMagic ? QcStatus.PASSED.name() : QcStatus.FAILED.name(),
+                validMagic ? "Image magic bytes match " + fileExt.toUpperCase()
+                        : "Image magic bytes do not match " + fileExt.toUpperCase() + " (expected " + expectedMagic + ")"
+        ));
+        if (!validMagic) {
+            errors.add("File has " + fileExt + " extension but magic bytes do not match");
+        }
+        if (content.length < 128) {
+            warnings.add("Image file is unusually small");
+        }
+    }
+
+    private void inspectHdf5(
+            byte[] content,
+            List<QcCheckResult> checks,
+            List<String> warnings,
+            List<String> errors) {
+        // HDF5 signature: \x89HDF\r\n\x1a\n
+        byte[] signature = {(byte) 0x89, 'H', 'D', 'F', '\r', '\n', (byte) 0x1a, '\n'};
+        boolean valid = content.length >= 8;
+        for (int i = 0; valid && i < signature.length; i++) {
+            if (content[i] != signature[i]) {
+                valid = false;
+                break;
+            }
+        }
+        checks.add(new QcCheckResult(
+                "hdf5Signature",
+                valid ? QcStatus.PASSED.name() : QcStatus.FAILED.name(),
+                valid ? "HDF5 file signature is valid" : "HDF5 file signature is invalid"
+        ));
+        if (!valid) {
+            errors.add("HDF5 file signature is invalid");
+        }
+    }
+
+    private void inspectWav(
+            byte[] content,
+            List<QcCheckResult> checks,
+            List<String> warnings,
+            List<String> errors) {
+        // WAV files start with RIFF....WAVE
+        boolean validRiff = content.length >= 12
+                && content[0] == 'R' && content[1] == 'I' && content[2] == 'F' && content[3] == 'F'
+                && content[8] == 'W' && content[9] == 'A' && content[10] == 'V' && content[11] == 'E';
+        checks.add(new QcCheckResult(
+                "wavRiffHeader",
+                validRiff ? QcStatus.PASSED.name() : QcStatus.FAILED.name(),
+                validRiff ? "WAV RIFF header is valid" : "WAV RIFF header is invalid"
+        ));
+        if (!validRiff) {
+            errors.add("WAV file has invalid RIFF header");
+        }
+        if (content.length < 44) {
+            warnings.add("WAV file is smaller than minimum header size (44 bytes)");
+        }
+    }
+
+    private void inspectNpz(
+            byte[] content,
+            List<QcCheckResult> checks,
+            List<String> warnings,
+            List<String> errors) {
+        // NPZ is a ZIP file — check PK signature
+        boolean valid = content.length >= 4
+                && content[0] == 'P' && content[1] == 'K'
+                && (content[2] == 0x03 || content[2] == 0x05) && content[3] == 0x04;
+        checks.add(new QcCheckResult(
+                "npzZipSignature",
+                valid ? QcStatus.PASSED.name() : QcStatus.FAILED.name(),
+                valid ? "NPZ/ZIP signature is valid" : "NPZ/ZIP signature is invalid"
+        ));
+        if (!valid) {
+            errors.add("NPZ file has invalid ZIP signature");
         }
     }
 }

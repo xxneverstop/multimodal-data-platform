@@ -1,6 +1,6 @@
 <template>
-  <span class="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-1 text-xs font-medium ring-1 ring-inset" :class="statusTone(status)">
-    <span class="h-1.5 w-1.5 rounded-full bg-current opacity-80"></span>
+  <span class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium leading-5" :class="statusTone(status)">
+    <span class="h-1 w-1 rounded-full bg-current opacity-70"></span>
     {{ resolvedLabel }}
   </span>
 </template>

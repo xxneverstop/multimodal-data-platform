@@ -58,7 +58,7 @@
         </label>
       </div>
       <div class="mt-4 flex items-center gap-2">
-        <BaseButton variant="primary" :disabled="status.running" @click="handleStart">
+        <BaseButton variant="primary" :disabled="status.running || needsReviewAction || savingSession || discardingSession" @click="handleStart">
           &#9654; 开始采集
         </BaseButton>
         <BaseButton variant="danger" :disabled="!status.running" @click="handleStop">
@@ -67,15 +67,32 @@
         <BaseButton
           v-if="status.sessionId && !status.running"
           variant="secondary"
-          :disabled="uploading"
-          @click="showUploadDialog = true; uploadStage = 'idle'; uploadedFiles = []; uploadMsg = ''"
+          :disabled="uploading || !canUploadCurrentSession"
+          @click="showUploadDialog = true; uploadStage = 'idle'; uploadProgress = 0; uploadedFiles = []; uploadMsg = ''"
         >
           {{ uploading ? '上传中...' : '&#9650; 上传到平台' }}
+        </BaseButton>
+        <BaseButton
+          v-if="needsReviewAction"
+          variant="secondary"
+          :disabled="savingSession || discardingSession"
+          @click="handleSavePendingSession"
+        >
+          {{ savingSession ? "保存中..." : "保存本次采集" }}
+        </BaseButton>
+        <BaseButton
+          v-if="needsReviewAction"
+          variant="ghost"
+          :disabled="savingSession || discardingSession"
+          @click="handleDiscardPendingSession"
+        >
+          {{ discardingSession ? "丢弃中..." : "丢弃本次采集" }}
         </BaseButton>
         <span v-if="errorMsg" class="text-sm text-red-500">{{ errorMsg }}</span>
         <span v-if="status.sessionId" class="ml-2 text-xs text-slate-400">
           Session: {{ status.sessionId }}
         </span>
+        <span v-if="uploadBlockedReason" class="text-xs text-amber-600">{{ uploadBlockedReason }}</span>
         <span v-if="uploadMsg" class="text-sm" :class="uploadOk ? 'text-green-600' : 'text-red-500'">{{ uploadMsg }}</span>
       </div>
 
@@ -95,10 +112,23 @@
             <span class="text-sm font-medium" :class="stageColor">
               {{ stageLabel }}
             </span>
+            <span v-if="uploadStage === 'packaging' || uploadStage === 'uploading'" class="text-xs text-slate-400 ml-1">
+              {{ uploadProgress }}%
+            </span>
           </div>
-          <!-- MinIO paths on success -->
+          <!-- Progress bar -->
+          <div v-if="uploadStage === 'packaging' || uploadStage === 'uploading'" class="mb-2">
+            <div class="h-2 w-full rounded-full bg-slate-200 overflow-hidden">
+              <div
+                class="h-full rounded-full transition-all duration-500 ease-out"
+                :class="uploadStage === 'packaging' ? 'bg-amber-400' : 'bg-blue-500'"
+                :style="{ width: uploadProgress + '%' }"
+              />
+            </div>
+          </div>
+          <!-- OSS paths on success -->
           <div v-if="uploadStage === 'done' && uploadedFiles.length" class="mt-2 rounded bg-white p-2 text-xs">
-            <div class="text-slate-500 mb-1 font-medium">MinIO 存储路径：</div>
+            <div class="text-slate-500 mb-1 font-medium">OSS 存储路径：</div>
             <div v-for="f in uploadedFiles" :key="f.objectKey" class="text-slate-600 font-mono truncate mb-0.5">
               <span class="text-slate-400">{{ f.name }}:</span> {{ f.objectKey }}
             </div>
@@ -107,15 +137,14 @@
           <div v-if="uploadStage === 'error'" class="mt-2 text-xs text-red-500">{{ uploadMsg }}</div>
         </div>
 
-        <div v-if="uploadStage === 'idle' || uploadStage === 'error'" class="grid gap-3 md:grid-cols-2">
+        <div v-if="uploadStage === 'idle' || uploadStage === 'error'">
           <label class="block">
             <span class="mb-1 block text-xs text-slate-500">平台地址</span>
             <input v-model="uploadForm.platformUrl" class="app-input app-input-compact w-full" placeholder="http://localhost:19021" />
           </label>
-          <label class="block">
-            <span class="mb-1 block text-xs text-slate-500">Task ID</span>
-            <input v-model.number="uploadForm.taskId" type="number" class="app-input app-input-compact w-full" placeholder="1" />
-          </label>
+          <div class="mt-2 text-xs text-slate-500">
+            采集任务：<span class="font-medium text-slate-700">{{ selectedTaskName }}</span>
+          </div>
         </div>
         <div class="mt-3 flex items-center gap-2">
           <BaseButton v-if="uploadStage === 'idle' || uploadStage === 'error'" variant="primary" size="sm" :disabled="uploading" @click="handleUpload">确认上传</BaseButton>
@@ -325,6 +354,9 @@ import {
   createRealtimeSocket,
   fetchCurrentSession,
   fetchDevices,
+  fetchSessionHistory,
+  discardSession,
+  saveSession,
   startSession,
   stopSession,
   uploadSession,
@@ -339,7 +371,15 @@ import type { TaskResponse } from "@/types/task";
 
 // ── Reactive state ─────────────────────────────────────────────────────
 
-const params = reactive({ taskId: "TASK-001", subjectCode: "SUBJ-001", actionName: "walking" });
+const params = reactive({
+  taskId: "TASK-001",
+  taskName: "默认采集任务",
+  subjectCode: "SUBJ-001",
+  subjectName: "被试-001",
+  actionName: "walking",
+  profileCode: "BINOCULAR_HMD_IMU_V1",
+  profileName: "默认规则"
+});
 const status = reactive<RealtimeStatus>(emptyStatus());
 const wsConnected = ref(false);
 const errorMsg = ref("");
@@ -351,6 +391,49 @@ const logContainer = ref<HTMLElement | null>(null);
 // Task selector
 const tasks = ref<TaskResponse[]>([]);
 const selectedTaskId = ref<number | null>(null);
+const savedSessionIds = ref<string[]>([]);
+const savingSession = ref(false);
+const discardingSession = ref(false);
+const selectedTaskName = computed(() => {
+  const t = tasks.value.find((t) => t.id === selectedTaskId.value);
+  return t ? `${t.taskName} (ID: ${t.id})` : "未选择任务";
+});
+const isPendingReview = computed(() => status.sessionPhase === "pending_review" || status.pendingAction === "review");
+const isCurrentSessionSaved = computed(() => !!status.sessionId && savedSessionIds.value.includes(status.sessionId));
+const needsReviewAction = computed(() => !!status.sessionId && !status.running && isPendingReview.value && !isCurrentSessionSaved.value);
+const canUploadCurrentSession = computed(() => !!selectedTaskId.value && !!status.sessionId && !status.running && (!isPendingReview.value || isCurrentSessionSaved.value));
+/*
+const uploadBlockedReason = computed(() => {
+  if (status.running) {
+    return "";
+  }
+  if (!selectedTaskId.value && status.sessionId) {
+    return "请先选择采集任务";
+  }
+  if (needsReviewAction.value) {
+    return "当前 Session 还在待确认状态，请先保存或丢弃，再继续采集或上传。";
+  }
+  if (!selectedTaskId.value && status.sessionId) {
+    return "Please select a task first.";
+  }
+  if (needsReviewAction.value) {
+    return "褰撳墠 Session 杩樺湪寰呯‘璁ょ姸鎬侊紝璇峰厛瀹屾垚淇濆瓨/褰掓。鍐嶄笂浼犮€?";
+  }
+  return "";
+});
+*/
+const uploadBlockedReason = computed(() => {
+  if (status.running) {
+    return "";
+  }
+  if (!selectedTaskId.value && status.sessionId) {
+    return "Please select a task first.";
+  }
+  if (needsReviewAction.value) {
+    return "This session is pending review. Please save or discard it before continuing.";
+  }
+  return "";
+});
 const showNewTaskDialog = ref(false);
 const newTaskForm = reactive({
   taskName: "",
@@ -369,11 +452,12 @@ let mounted = true;
 
 const uploading = ref(false);
 const uploadStage = ref<"idle" | "packaging" | "uploading" | "done" | "error">("idle");
+const uploadProgress = ref(0);
 const uploadMsg = ref("");
 const uploadOk = ref(false);
 const uploadedFiles = ref<{ name: string; objectKey: string }[]>([]);
 const showUploadDialog = ref(false);
-const uploadForm = reactive({ platformUrl: "http://localhost:19021", taskId: 1 });
+const uploadForm = reactive({ platformUrl: "http://localhost:19021" });
 
 // ── Computed video status per source ───────────────────────────────────
 
@@ -444,8 +528,11 @@ function onTaskSelect() {
   const task = tasks.value.find((t) => t.id === selectedTaskId.value);
   if (task) {
     params.taskId = String(task.id);
+    params.taskName = task.taskName || params.taskName;
     params.subjectCode = task.subjectCode || params.subjectCode;
+    params.subjectName = task.subjectName || params.subjectName;
     params.actionName = task.actionName || params.actionName;
+    params.profileName = task.profileName || params.profileName;
   }
 }
 
@@ -454,6 +541,17 @@ async function fetchTaskList() {
     const page = await fetchTasks(1, 100);
     tasks.value = page.records ?? [];
   } catch { /* offline */ }
+}
+
+async function refreshSavedSessions() {
+  try {
+    const history = await fetchSessionHistory();
+    savedSessionIds.value = (history.sessions ?? [])
+      .filter((session: any) => session?.archiveExists || session?.archiveFile)
+      .map((session: any) => String(session.sessionId));
+  } catch {
+    savedSessionIds.value = [];
+  }
 }
 
 async function handleCreateTask() {
@@ -485,7 +583,13 @@ async function handleStart() {
   errorMsg.value = "";
   try {
     const result = await startSession({
-      taskId: params.taskId, subjectCode: params.subjectCode, actionName: params.actionName
+      taskId: params.taskId,
+      taskName: params.taskName,
+      subjectCode: params.subjectCode,
+      subjectName: params.subjectName,
+      actionName: params.actionName,
+      profileCode: params.profileCode,
+      profileName: params.profileName
     });
     if (!result.success) { errorMsg.value = result.message || "启动失败"; return; }
   } catch (e) {
@@ -502,22 +606,100 @@ async function handleStop() {
   }
 }
 
+/*
+async function handleSavePendingSession() {
+  savingSession.value = true;
+  errorMsg.value = "";
+  try {
+    const result = await saveSession();
+    if (!result.success) {
+      errorMsg.value = result.message || "保存采集失败";
+      return;
+    }
+    const savedId = result.savedSession?.sessionId || status.sessionId;
+    if (savedId) {
+      savedSessionIds.value = Array.from(new Set([...savedSessionIds.value, String(savedId)]));
+    }
+    uploadMsg.value = result.message || "采集已保存，可继续上传";
+    uploadOk.value = true;
+    await refreshSavedSessions();
+  } catch (e) {
+    errorMsg.value = e instanceof Error ? e.message : "保存采集失败";
+  } finally {
+    savingSession.value = false;
+  }
+}
+
+async function handleDiscardPendingSession() {
+  discardingSession.value = true;
+  errorMsg.value = "";
+  try {
+    const result = await discardSession();
+    if (!result.success) {
+      errorMsg.value = result.message || "丢弃采集失败";
+      return;
+    }
+    if (status.sessionId) {
+      savedSessionIds.value = savedSessionIds.value.filter((sessionId) => sessionId !== status.sessionId);
+    }
+    uploadMsg.value = result.message || "已丢弃本次采集";
+    uploadOk.value = true;
+    showUploadDialog.value = false;
+    Object.assign(status, emptyStatus());
+    await refreshSavedSessions();
+  } catch (e) {
+    errorMsg.value = e instanceof Error ? e.message : "丢弃采集失败";
+  } finally {
+    discardingSession.value = false;
+  }
+}
+
+let uploadProgressTimer: ReturnType<typeof setInterval> | null = null;
+
 async function handleUpload() {
+  if (!canUploadCurrentSession.value) {
+    uploadStage.value = "error";
+    uploadMsg.value = uploadBlockedReason.value || "褰撳墠 Session 鏆傛椂涓嶅彲涓婁紶";
+    uploadOk.value = false;
+    return;
+  }
+
   uploading.value = true;
   uploadStage.value = "packaging";
+  uploadProgress.value = 0;
   uploadMsg.value = "";
   uploadOk.value = false;
   uploadedFiles.value = [];
+
+  if (selectedTaskId.value == null) {
+    uploadStage.value = "error";
+    uploadMsg.value = "未选择采集任务";
+    uploadOk.value = false;
+    uploading.value = false;
+    return;
+  }
+
+  // Drive progress during packaging (0→30%) and uploading (30→90%)
+  uploadProgressTimer = setInterval(() => {
+    if (uploadStage.value === "packaging") {
+      uploadProgress.value = Math.min(uploadProgress.value + 3, 30);
+    } else if (uploadStage.value === "uploading") {
+      uploadProgress.value = Math.min(uploadProgress.value + 2, 90);
+    }
+  }, 200);
+
   try {
-    // Brief delay so the user sees "packaging" stage
     await new Promise((r) => setTimeout(r, 600));
     uploadStage.value = "uploading";
+    uploadProgress.value = Math.max(uploadProgress.value, 30);
     const result = await uploadSession({
       platformUrl: uploadForm.platformUrl,
-      taskId: uploadForm.taskId,
+      platformTaskId: selectedTaskId.value!,
+      sessionId: status.sessionId ?? undefined
     });
     if (result.success) {
       uploadStage.value = "done";
+      uploadProgress.value = 100;
       uploadMsg.value = result.message || "上传成功！";
       uploadOk.value = true;
       if (result.platformResponse?.assets) {
@@ -535,13 +717,142 @@ async function handleUpload() {
     uploadStage.value = "error";
     uploadMsg.value = e instanceof Error ? e.message : "上传失败";
     uploadOk.value = false;
+  } finally {
+    if (uploadProgressTimer) { clearInterval(uploadProgressTimer); uploadProgressTimer = null; }
+    uploading.value = false;
   }
-  uploading.value = false;
 }
 
 function closeUploadDialog() {
+  if (uploadProgressTimer) { clearInterval(uploadProgressTimer); uploadProgressTimer = null; }
   showUploadDialog.value = false;
   uploadStage.value = "idle";
+  uploadProgress.value = 0;
+  uploadMsg.value = "";
+  uploadedFiles.value = [];
+}
+
+*/
+async function handleSavePendingSession() {
+  savingSession.value = true;
+  errorMsg.value = "";
+  try {
+    const result = await saveSession();
+    if (!result.success) {
+      errorMsg.value = result.message || "Failed to save the collection.";
+      return;
+    }
+    const savedId = result.savedSession?.sessionId || status.sessionId;
+    if (savedId) {
+      savedSessionIds.value = Array.from(new Set([...savedSessionIds.value, String(savedId)]));
+    }
+    uploadMsg.value = result.message || "Collection saved. You can upload it now.";
+    uploadOk.value = true;
+    await refreshSavedSessions();
+  } catch (e) {
+    errorMsg.value = e instanceof Error ? e.message : "Failed to save the collection.";
+  } finally {
+    savingSession.value = false;
+  }
+}
+
+async function handleDiscardPendingSession() {
+  discardingSession.value = true;
+  errorMsg.value = "";
+  try {
+    const result = await discardSession();
+    if (!result.success) {
+      errorMsg.value = result.message || "Failed to discard the collection.";
+      return;
+    }
+    if (status.sessionId) {
+      savedSessionIds.value = savedSessionIds.value.filter((sessionId) => sessionId !== status.sessionId);
+    }
+    uploadMsg.value = result.message || "Collection discarded.";
+    uploadOk.value = true;
+    showUploadDialog.value = false;
+    Object.assign(status, emptyStatus());
+    await refreshSavedSessions();
+  } catch (e) {
+    errorMsg.value = e instanceof Error ? e.message : "Failed to discard the collection.";
+  } finally {
+    discardingSession.value = false;
+  }
+}
+
+let uploadProgressTimer: ReturnType<typeof setInterval> | null = null;
+
+async function handleUpload() {
+  if (!canUploadCurrentSession.value) {
+    uploadStage.value = "error";
+    uploadMsg.value = uploadBlockedReason.value || "This session cannot be uploaded right now.";
+    uploadOk.value = false;
+    return;
+  }
+
+  uploading.value = true;
+  uploadStage.value = "packaging";
+  uploadProgress.value = 0;
+  uploadMsg.value = "";
+  uploadOk.value = false;
+  uploadedFiles.value = [];
+
+  if (selectedTaskId.value == null) {
+    uploadStage.value = "error";
+    uploadMsg.value = "Please select a task first.";
+    uploadOk.value = false;
+    uploading.value = false;
+    return;
+  }
+
+  uploadProgressTimer = setInterval(() => {
+    if (uploadStage.value === "packaging") {
+      uploadProgress.value = Math.min(uploadProgress.value + 3, 30);
+    } else if (uploadStage.value === "uploading") {
+      uploadProgress.value = Math.min(uploadProgress.value + 2, 90);
+    }
+  }, 200);
+
+  try {
+    await new Promise((r) => setTimeout(r, 600));
+    uploadStage.value = "uploading";
+    uploadProgress.value = Math.max(uploadProgress.value, 30);
+    const result = await uploadSession({
+      platformUrl: uploadForm.platformUrl,
+      platformTaskId: selectedTaskId.value!,
+      sessionId: status.sessionId ?? undefined
+    });
+    if (result.success) {
+      uploadStage.value = "done";
+      uploadProgress.value = 100;
+      uploadMsg.value = result.message || "Upload completed.";
+      uploadOk.value = true;
+      if (result.platformResponse?.assets) {
+        uploadedFiles.value = result.platformResponse.assets.map((a: any) => ({
+          name: a.displayName || a.originalFilename || "file",
+          objectKey: a.objectKey || "-"
+        }));
+      }
+    } else {
+      uploadStage.value = "error";
+      uploadMsg.value = result.message || "Upload failed.";
+      uploadOk.value = false;
+    }
+  } catch (e) {
+    uploadStage.value = "error";
+    uploadMsg.value = e instanceof Error ? e.message : "Upload failed.";
+    uploadOk.value = false;
+  } finally {
+    if (uploadProgressTimer) { clearInterval(uploadProgressTimer); uploadProgressTimer = null; }
+    uploading.value = false;
+  }
+}
+
+function closeUploadDialog() {
+  if (uploadProgressTimer) { clearInterval(uploadProgressTimer); uploadProgressTimer = null; }
+  showUploadDialog.value = false;
+  uploadStage.value = "idle";
+  uploadProgress.value = 0;
   uploadMsg.value = "";
   uploadedFiles.value = [];
 }
@@ -552,6 +863,7 @@ const stageColor = computed(() => {
   return "text-blue-600";
 });
 
+/*
 const stageLabel = computed(() => {
   switch (uploadStage.value) {
     case "packaging": return "正在打包 Session 文件...";
@@ -563,6 +875,17 @@ const stageLabel = computed(() => {
 });
 
 // ── Formatting ─────────────────────────────────────────────────────────
+
+*/
+const stageLabel = computed(() => {
+  switch (uploadStage.value) {
+    case "packaging": return "Packaging session files...";
+    case "uploading": return "Uploading to the platform...";
+    case "done": return "Upload completed.";
+    case "error": return "Upload failed.";
+    default: return "";
+  }
+});
 
 function formatElapsed(ms: number): string {
   if (!ms || ms <= 0) return "00:00";
@@ -594,6 +917,7 @@ onMounted(async () => {
   try { devices.value = await fetchDevices(); } catch { /* offline */ }
   try { const cur = await fetchCurrentSession(); if (cur) Object.assign(status, cur); } catch { /* offline */ }
   await fetchTaskList();
+  await refreshSavedSessions();
   connectWs();
 });
 onBeforeUnmount(() => { mounted = false; disconnectWs(); });
