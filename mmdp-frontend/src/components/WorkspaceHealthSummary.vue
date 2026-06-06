@@ -1,10 +1,10 @@
 <template>
-  <section class="workspace-health-grid">
+  <section :class="compact ? 'workspace-health-grid-compact' : 'workspace-health-grid'">
     <article
       v-for="item in items"
       :key="item.label"
       class="workspace-health-item"
-      :class="item.tone ? `app-tone-${item.tone}` : ''"
+      :class="[compact ? 'workspace-health-item-compact' : '', item.tone ? `app-tone-${item.tone}` : '']"
     >
       <div class="flex items-start gap-3">
         <div class="app-metric-icon mt-0.5">
@@ -12,8 +12,8 @@
         </div>
         <div class="min-w-0">
           <div class="text-xs font-medium tracking-[0.08em] text-[var(--color-text-tertiary)]">{{ item.label }}</div>
-          <div class="mt-1 text-sm font-semibold text-[var(--color-text-primary)]">{{ item.value }}</div>
-          <p v-if="item.caption" class="mt-1 text-xs leading-5 text-[var(--color-text-tertiary)]">{{ item.caption }}</p>
+          <div :class="compact ? 'mt-0.5 text-[13px] font-semibold text-[var(--color-text-primary)]' : 'mt-1 text-sm font-semibold text-[var(--color-text-primary)]'">{{ item.value }}</div>
+          <p v-if="item.caption" :class="compact ? 'mt-0.5 text-[11px] leading-5 text-[var(--color-text-tertiary)]' : 'mt-1 text-xs leading-5 text-[var(--color-text-tertiary)]'">{{ item.caption }}</p>
         </div>
       </div>
     </article>
@@ -32,5 +32,6 @@ defineProps<{
     icon: string;
     tone?: MetricTone;
   }>;
+  compact?: boolean;
 }>();
 </script>

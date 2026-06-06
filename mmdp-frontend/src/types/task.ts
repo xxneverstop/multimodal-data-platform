@@ -44,10 +44,10 @@ export interface TaskListQuery {
 
 export interface CreateTaskRequest {
   taskName: string;
-  subjectCode?: string;
+  subjectCode: string;
   subjectName?: string;
   actionName: string;
-  profileId?: number | null;
+  profileId: number | null;
   deviceType?: string;
   modality?: string;
   collectDate: string;

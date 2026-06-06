@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MMDP 阿里云交接 — 风格预览</title>
+<style>
+/* ============================================================
+   设计系统 · 三版共享
+   ============================================================ */
+:root {
+  /* V1 终端暗色 (默认) */
+  --bg-deep:    #0a0e14;
+  --bg-mid:     #131820;
+  --bg-card:    #1a1f2b;
+  --text-1:     #e6edf3;
+  --text-2:     #8b949e;
+  --text-3:     #656d76;
+  --accent:     #00e676;
+  --accent-dim: #009944;
+  --border:     #21262d;
+  --font-display: 'PingFang SC', 'Microsoft YaHei UI', 'HarmonyOS Sans SC', sans-serif;
+  --font-mono:   'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  --tag-bg:      rgba(0,230,118,0.10);
+  --tag-border:  rgba(0,230,118,0.25);
+  --rule-color:  #30363d;
+  --chrome-bar:  #1a1f2b;
+  --chrome-dot-r:#ff5f57;
+  --chrome-dot-y:#febc2e;
+  --chrome-dot-g:#28c840;
+  --brand:       #0969da;
+}
+
+body.v2 {
+  --bg-deep:    #0d1b2a;
+  --bg-mid:     #132840;
+  --bg-card:    #1a3355;
+  --text-1:     #dce6f0;
+  --text-2:     #7b9abf;
+  --text-3:     #5a7a9a;
+  --accent:     #4da6ff;
+  --accent-dim: #2975cc;
+  --border:     #204060;
+  --tag-bg:     rgba(77,166,255,0.10);
+  --tag-border: rgba(77,166,255,0.25);
+  --rule-color: #204060;
+  --chrome-bar: #132840;
+  --chrome-dot-r:#ff5f57;
+  --chrome-dot-y:#febc2e;
+  --chrome-dot-g:#28c840;
+}
+
+body.v3 {
+  --bg-deep:    #111113;
+  --bg-mid:     #1a1a1e;
+  --bg-card:    #1e1e22;
+  --text-1:     #f0f0f0;
+  --text-2:     #909098;
+  --text-3:     #686870;
+  --accent:     #ff6b35;
+  --accent-dim: #cc4400;
+  --border:     #2a2a30;
+  --tag-bg:     rgba(255,107,53,0.10);
+  --tag-border: rgba(255,107,53,0.25);
+  --rule-color: #2a2a30;
+  --chrome-bar: transparent;
+  --chrome-dot-r:transparent;
+  --chrome-dot-y:transparent;
+  --chrome-dot-g:transparent;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%;
+  background: #000;
+  font-family: var(--font-display);
+  overflow: hidden;
+}
+
+/* ---- 顶栏：风格切换 ---- */
+#variantBar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 999;
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  height: 48px; background: #0d1117; border-bottom: 1px solid #21262d;
+}
+#variantBar button {
+  padding: 6px 20px; border-radius: 6px; border: 1px solid #30363d;
+  background: transparent; color: #8b949e; font-size: 14px; cursor: pointer;
+  font-family: var(--font-display); transition: all 0.2s;
+}
+#variantBar button:hover { border-color: #58a6ff; color: #c9d1d9; }
+#variantBar button.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+#variantBar .label { color: #484f58; font-size: 13px; margin-right: 8px; }
+
+/* ---- 舞台 ---- */
+#stage {
+  position: fixed; top: 48px; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+#deck {
+  width: 1920px; height: 1080px; position: relative; overflow: hidden;
+  transform-origin: center center;
+  border-radius: 8px;
+  box-shadow: 0 0 60px rgba(0,0,0,0.5);
+  background: var(--bg-deep);
+}
+
+/* ---- 导航 ---- */
+#nav {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 1000;
+  display: flex; align-items: center; gap: 16px;
+  background: rgba(13,17,23,0.92); border: 1px solid #30363d;
+  border-radius: 999px; padding: 8px 20px;
+  backdrop-filter: blur(12px);
+}
+#nav button {
+  width: 36px; height: 36px; border-radius: 50%; border: 1px solid #30363d;
+  background: transparent; color: #c9d1d9; font-size: 18px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+}
+#nav button:hover { background: #21262d; border-color: #58a6ff; }
+#nav button:disabled { opacity: 0.3; cursor: default; }
+#nav .counter { color: #8b949e; font-size: 14px; min-width: 60px; text-align: center;
+  font-family: var(--font-mono); }
+
+/* ---- Slides ---- */
+.slide {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  padding: 90px 120px 100px;
+  color: var(--text-1);
+}
+.slide:not(.active) { display: none !important; }
+
+/* ======== COVER ======== */
+.s-cover {
+  justify-content: center; align-items: flex-start;
+  background:
+    radial-gradient(ellipse at 20% 50%, var(--accent-dim) 0%, transparent 55%),
+    var(--bg-deep);
+}
+.s-cover .eyebrow {
+  font-family: var(--font-mono); font-size: 22px; color: var(--accent);
+  letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 28px;
+}
+.s-cover h1 {
+  font-size: 82px; font-weight: 700; line-height: 1.15; max-width: 1300px;
+  letter-spacing: 0.02em;
+}
+.s-cover h1 .hl { color: var(--accent); }
+.s-cover .sub {
+  margin-top: 32px; font-size: 28px; color: var(--text-2); max-width: 1100px;
+  line-height: 1.5;
+}
+.s-cover .meta-row {
+  margin-top: 48px; display: flex; gap: 40px; font-family: var(--font-mono);
+  font-size: 18px; color: var(--text-3);
+}
+.s-cover .meta-row span { display: flex; align-items: center; gap: 8px; }
+.s-cover .meta-row .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+/* V1 终端窗口 chrome */
+.s-cover .chrome {
+  position: absolute; top: 0; left: 0; right: 0; height: 44px;
+  background: var(--chrome-bar);
+  display: flex; align-items: center; gap: 10px; padding: 0 20px;
+}
+.s-cover .chrome .d { width: 13px; height: 13px; border-radius: 50%; }
+.s-cover .chrome .d.r { background: var(--chrome-dot-r); }
+.s-cover .chrome .d.y { background: var(--chrome-dot-y); }
+.s-cover .chrome .d.g { background: var(--chrome-dot-g); }
+.s-cover .chrome .path {
+  margin-left: 16px; font-family: var(--font-mono); font-size: 15px; color: var(--text-3);
+}
+
+/* V2 蓝图网格线 */
+.v2 .s-cover::before {
+  content: ""; position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(77,166,255,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(77,166,255,0.04) 1px, transparent 1px);
+  background-size: 80px 80px;
+  pointer-events: none;
+}
+/* V2 标注线 */
+.v2 .s-cover .blueprint-mark {
+  position: absolute; bottom: 200px; right: 180px;
+  font-family: var(--font-mono); font-size: 14px; color: var(--accent);
+  opacity: 0.6;
+}
+.v2 .s-cover .blueprint-mark::before {
+  content: ""; position: absolute; left: -60px; top: 50%;
+  width: 50px; height: 1px; background: var(--accent); opacity: 0.4;
+}
+
+/* V3 几何分割 */
+.v3 .s-cover::after {
+  content: ""; position: absolute; top: 0; right: 0; bottom: 0; width: 360px;
+  background: var(--bg-mid); border-left: 2px solid var(--accent);
+  opacity: 0.4; pointer-events: none;
+}
+.v3 .s-cover .geo-accent {
+  position: absolute; top: 120px; right: 200px;
+  width: 120px; height: 4px; background: var(--accent);
+}
+
+/* ======== CONTENT SLIDE ======== */
+.s-content {
+  background: var(--bg-deep);
+}
+.s-content .page-header {
+  margin-bottom: 56px;
+}
+.s-content .page-header .ch-number {
+  font-family: var(--font-mono); font-size: 18px; color: var(--accent);
+  letter-spacing: 0.15em; margin-bottom: 12px;
+}
+.s-content .page-header h2 {
+  font-size: 64px; font-weight: 700; line-height: 1.2;
+  max-width: 1400px;
+}
+.s-content .page-header .rule {
+  margin-top: 24px; height: 2px; background: var(--accent); width: 120px; opacity: 0.6;
+}
+
+/* 两列布局 */
+.s-content .two-col {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 80px; flex: 1;
+}
+.s-content .col h3 {
+  font-size: 32px; font-weight: 600; margin-bottom: 28px;
+  color: var(--accent);
+}
+.s-content .col .item {
+  padding: 20px 0; border-bottom: 1px solid var(--rule-color);
+}
+.s-content .col .item:last-child { border-bottom: none; }
+.s-content .col .item .label {
+  font-family: var(--font-mono); font-size: 16px; color: var(--text-3);
+  letter-spacing: 0.08em; margin-bottom: 8px;
+}
+.s-content .col .item .desc {
+  font-size: 26px; line-height: 1.45; color: var(--text-1);
+}
+.s-content .col .tag {
+  display: inline-block; margin-top: 10px;
+  padding: 4px 14px; border-radius: 4px;
+  background: var(--tag-bg); border: 1px solid var(--tag-border);
+  font-family: var(--font-mono); font-size: 16px; color: var(--accent);
+}
+
+/* 架构概览图 (简化版) */
+.s-arch {
+  background: var(--bg-deep);
+}
+.s-arch .arch-diagram {
+  flex: 1; display: flex; flex-direction: column; gap: 32px;
+  justify-content: center; padding: 0 60px;
+}
+.s-arch .arch-row {
+  display: flex; align-items: center; gap: 24px;
+}
+.s-arch .arch-row.labels { gap: 24px; margin-bottom: 8px; }
+.s-arch .arch-row.labels span {
+  font-family: var(--font-mono); font-size: 18px; color: var(--text-3);
+  letter-spacing: 0.08em;
+}
+.s-arch .arch-box {
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 8px; font-weight: 600; text-align: center;
+  font-family: var(--font-display);
+}
+.s-arch .arch-box.layer-pub {
+  flex: 0 0 360px; height: 100px;
+  border: 2px solid var(--accent); background: var(--tag-bg);
+  font-size: 28px; color: var(--accent);
+}
+.s-arch .arch-box.layer-nginx {
+  flex: 1; height: 120px;
+  border: 2px solid #58a6ff; background: rgba(88,166,255,0.08);
+  font-size: 28px; color: #58a6ff;
+}
+.s-arch .arch-box.layer-app {
+  flex: 1; height: 130px;
+  border: 2px solid #f0883e; background: rgba(240,136,62,0.08);
+  font-size: 28px; color: #f0883e;
+}
+.s-arch .arch-box.layer-data {
+  flex: 0 0 440px; height: 100px;
+  border: 2px solid #3fb950; background: rgba(63,185,80,0.08);
+  font-size: 26px; color: #3fb950;
+}
+.s-arch .arch-arrow {
+  flex: 0 0 40px; text-align: center;
+  font-family: var(--font-mono); font-size: 32px; color: var(--text-3);
+}
+
+/* page-footer */
+.page-footer {
+  position: absolute; bottom: 60px; left: 120px; right: 120px;
+  display: flex; justify-content: space-between;
+  font-family: var(--font-mono); font-size: 16px; color: var(--text-3);
+}
+
+/* ======== SLIDE 3: 权限层级 ======== */
+.s-perm {
+  background: var(--bg-deep);
+}
+.s-perm .perm-layers {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 0;
+  padding: 0 80px;
+}
+.s-perm .perm-level {
+  flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center;
+  padding: 40px 30px; border-radius: 12px;
+  border: 2px solid var(--border); background: var(--bg-card);
+}
+.s-perm .perm-level.warn {
+  border-color: #d29922; background: rgba(210,153,34,0.06);
+}
+.s-perm .perm-level.ok {
+  border-color: #3fb950; background: rgba(63,185,80,0.06);
+}
+.s-perm .perm-level .lvl-num {
+  font-family: var(--font-mono); font-size: 56px; font-weight: 700;
+  color: var(--accent); margin-bottom: 16px;
+}
+.s-perm .perm-level.warn .lvl-num { color: #d29922; }
+.s-perm .perm-level.ok .lvl-num { color: #3fb950; }
+.s-perm .perm-level .lvl-title {
+  font-size: 28px; font-weight: 600; margin-bottom: 16px; color: var(--text-1);
+}
+.s-perm .perm-level .lvl-desc {
+  font-size: 20px; color: var(--text-2); line-height: 1.5;
+}
+.s-perm .perm-arrow {
+  flex: 0 0 60px; font-size: 40px; color: var(--text-3);
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* V3 geometric strip on content slides */
+.v3 .s-content::before,
+.v3 .s-arch::before,
+.v3 .s-perm::before {
+  content: ""; position: absolute; top: 0; left: 0; bottom: 0; width: 6px;
+  background: var(--accent); opacity: 0.5;
+}
+
+</style>
+</head>
+<body>
+
+<!-- 风格切换栏 -->
+<div id="variantBar">
+  <span class="label">风格方案</span>
+  <button class="active" onclick="setVariant(0)">V1 · 终端暗色</button>
+  <button onclick="setVariant(1)">V2 · 蓝图暗蓝</button>
+  <button onclick="setVariant(2)">V3 · 工业墨色</button>
+</div>
+
+<!-- 舞台 -->
+<div id="stage">
+  <div id="deck">
+
+    <!-- ======== SLIDE 1: COVER ======== -->
+    <div class="slide s-cover active" data-slide="0">
+      <div class="chrome"><div class="d r"></div><div class="d y"></div><div class="d g"></div><span class="path">~/mmdp/docs/aliyun-resource-handover.md</span></div>
+      <div class="eyebrow">Cloud Infrastructure · Handover</div>
+      <h1>MMDP <span class="hl">阿里云</span>资源管理与平台部署交接</h1>
+      <div class="sub">账号权限 · OSS 存储 · STS 直传 · Docker 部署 · 安全边界</div>
+      <div class="meta-row">
+        <span><span class="dot"></span> 13 章节</span>
+        <span>RAM · ECS · OSS · STS</span>
+        <span>2026 年 6 月</span>
+      </div>
+      <!-- V2 蓝图标注 -->
+      <div class="blueprint-mark">AC-01 · INFRASTRUCTURE</div>
+      <!-- V3 几何元素 -->
+      <div class="geo-accent"></div>
+    </div>
+
+    <!-- ======== SLIDE 2: 部署架构总览 ======== -->
+    <div class="slide s-arch" data-slide="1">
+      <div class="page-header">
+        <div class="ch-number">Chapter 01</div>
+        <h2>当前云端部署架构</h2>
+        <div class="rule"></div>
+      </div>
+      <div class="arch-diagram">
+        <div class="arch-row labels">
+          <span style="flex:0 0 360px">公网入口</span>
+          <span style="flex:0 0 40px"></span>
+          <span style="flex:1">反向代理</span>
+          <span style="flex:0 0 40px"></span>
+          <span style="flex:1">应用服务</span>
+          <span style="flex:0 0 40px"></span>
+          <span style="flex:0 0 440px">数据 & 存储</span>
+        </div>
+        <div class="arch-row">
+          <div class="arch-box layer-pub">80 / 443<br>ECS 公网 IP</div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-box layer-nginx">Nginx<br>静态资源 + /api 反代</div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-box layer-app">Spring Boot<br>:19021</div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-box layer-data">MySQL :3306<br>阿里云 OSS</div>
+        </div>
+      </div>
+      <div class="page-footer">
+        <span>MMDP · Docker Compose · Ubuntu 22.04</span>
+        <span>2 / 3</span>
+      </div>
+    </div>
+
+    <!-- ======== SLIDE 3: 账号与权限层级 ======== -->
+    <div class="slide s-perm" data-slide="2">
+      <div class="page-header">
+        <div class="ch-number">Chapter 02</div>
+        <h2>账号与权限层级</h2>
+        <div class="rule"></div>
+      </div>
+      <div class="perm-layers">
+        <div class="perm-level warn">
+          <div class="lvl-num">01</div>
+          <div class="lvl-title">主账号</div>
+          <div class="lvl-desc">资源归属<br>不开日常使用<br>禁止 AccessKey 分发</div>
+        </div>
+        <div class="perm-arrow">→</div>
+        <div class="perm-level ok">
+          <div class="lvl-num">02</div>
+          <div class="lvl-title">RAM 用户</div>
+          <div class="lvl-desc">power-user-access<br>日常开发 · 部署 · 运维<br>OSS / ECS 管理</div>
+        </div>
+        <div class="perm-arrow">→</div>
+        <div class="perm-level">
+          <div class="lvl-num">03</div>
+          <div class="lvl-title">子账号 / STS</div>
+          <div class="lvl-desc">新同学每人独立<br>最小权限策略<br>STS 临时凭证直传</div>
+        </div>
+      </div>
+      <div class="page-footer">
+        <span>MMDP · 权限最小化原则</span>
+        <span>3 / 3</span>
+      </div>
+    </div>
+
+  </div><!-- /#deck -->
+</div><!-- /#stage -->
+
+<!-- 导航 -->
+<div id="nav">
+  <button id="btnPrev" onclick="goSlide(-1)">←</button>
+  <span class="counter" id="counter">1 / 3</span>
+  <button id="btnNext" onclick="goSlide(1)">→</button>
+</div>
+
+<script>
+// ---- 自适应缩放 ----
+const PAD_X = 80, PAD_Y = 160;
+
+function resize() {
+  const deck = document.getElementById('deck');
+  const scale = Math.min(
+    (window.innerWidth - PAD_X) / 1920,
+    (window.innerHeight - 48 - PAD_Y) / 1080
+  );
+  deck.style.transform = `scale(${scale})`;
+}
+
+window.addEventListener('resize', resize);
+resize();
+
+// ---- 幻灯片导航 ----
+let currentSlide = 0;
+const totalSlides = 3;
+const slides = document.querySelectorAll('.slide');
+
+function goSlide(dir) {
+  slides[currentSlide].classList.remove('active');
+  currentSlide = (currentSlide + dir + totalSlides) % totalSlides;
+  slides[currentSlide].classList.add('active');
+  updateNav();
+  localStorage.setItem('mmdp-deck-slide', currentSlide);
+}
+
+function updateNav() {
+  document.getElementById('counter').textContent = `${currentSlide + 1} / ${totalSlides}`;
+  document.getElementById('btnPrev').disabled = currentSlide === 0;
+  document.getElementById('btnNext').disabled = currentSlide === totalSlides - 1;
+}
+
+// ---- 风格切换 ----
+function setVariant(idx) {
+  document.body.className = ['','v2','v3'][idx] || '';
+  document.querySelectorAll('#variantBar button').forEach((b,i) => {
+    b.classList.toggle('active', i === idx);
+  });
+  localStorage.setItem('mmdp-deck-variant', idx);
+  resize();
+}
+
+// ---- 键盘 ----
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft')  goSlide(-1);
+  if (e.key === 'ArrowRight') goSlide(1);
+  if (e.key === '1') setVariant(0);
+  if (e.key === '2') setVariant(1);
+  if (e.key === '3') setVariant(2);
+});
+
+// ---- 恢复 ----
+(function init() {
+  const savedSlide = +localStorage.getItem('mmdp-deck-slide') || 0;
+  const savedVariant = +localStorage.getItem('mmdp-deck-variant') || 0;
+  setVariant(savedVariant);
+  if (savedSlide > 0 && savedSlide < totalSlides) {
+    slides[currentSlide].classList.remove('active');
+    currentSlide = savedSlide;
+    slides[currentSlide].classList.add('active');
+  }
+  updateNav();
+})();
+</script>
+</body>
+</html>

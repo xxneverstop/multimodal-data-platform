@@ -34,7 +34,7 @@ const router = createRouter({
           path: "upload",
           name: "upload",
           component: () => import("@/views/upload/UploadEntryView.vue"),
-          meta: { title: "上传", description: "针对任务上传数据，兼容当前任务级上传接口。" },
+          meta: { title: "数据资产接入", description: "通过多文件上传、数据包导入或外部路径登记，将多模态数据接入平台。" },
         },
         {
           path: "acquisition",

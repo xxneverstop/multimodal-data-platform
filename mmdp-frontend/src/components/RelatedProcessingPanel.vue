@@ -1,6 +1,19 @@
 <template>
   <section class="workspace-processing-summary">
-    <div v-if="items.length" class="space-y-3">
+    <button
+      v-if="collapsible"
+      type="button"
+      class="workspace-disclosure"
+      @click="expanded = !expanded"
+    >
+      <div class="min-w-0">
+        <div class="text-sm font-semibold text-[var(--color-text-primary)]">{{ title }}</div>
+        <div class="mt-1 text-xs text-[var(--color-text-tertiary)]">{{ summaryText }}</div>
+      </div>
+      <div class="text-xs font-medium text-[var(--color-text-secondary)]">{{ expanded ? "收起" : "展开" }}</div>
+    </button>
+
+    <div v-if="(!collapsible || expanded) && items.length" class="space-y-3">
       <article
         v-for="item in items"
         :key="item.title"
@@ -22,18 +35,23 @@
         </div>
       </article>
     </div>
-    <div v-else class="rounded-[14px] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-surface-muted)] px-4 py-8 text-sm text-[var(--color-text-tertiary)]">
+
+    <div
+      v-else-if="!collapsible || expanded"
+      class="rounded-[14px] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-surface-muted)] px-4 py-5 text-sm text-[var(--color-text-tertiary)]"
+    >
       {{ emptyText }}
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
+import { computed, ref } from "vue";
 import BaseButton from "@/components/BaseButton.vue";
 import BaseIcon from "@/components/BaseIcon.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     items: Array<{
       title: string;
@@ -43,9 +61,25 @@ withDefaults(
       to?: string;
     }>;
     emptyText?: string;
+    collapsible?: boolean;
+    defaultExpanded?: boolean;
+    title?: string;
   }>(),
   {
     emptyText: "当前尚未进入处理阶段。",
+    collapsible: false,
+    defaultExpanded: false,
+    title: "相关处理",
   },
 );
+
+const expanded = ref(props.defaultExpanded);
+
+const summaryText = computed(() => {
+  if (props.items.length) {
+    const first = props.items[0];
+    return `最近 ${props.items.length} 条处理记录${first?.status ? ` · 最近状态 ${first.status}` : ""}`;
+  }
+  return props.emptyText;
+});
 </script>

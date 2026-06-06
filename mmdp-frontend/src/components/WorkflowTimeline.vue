@@ -1,10 +1,11 @@
 <template>
-  <section class="workspace-stage-timeline">
+  <section :class="compact ? 'workspace-stage-timeline-compact' : 'workspace-stage-timeline'">
     <article
       v-for="(stage, index) in stages"
       :key="stage.label"
       class="workspace-stage-node"
       :class="[
+        compact ? 'workspace-stage-node-compact' : '',
         stage.status === 'current' ? 'workspace-stage-node-active' : '',
         stage.status === 'risk' ? 'workspace-stage-node-risk' : '',
         stage.tone ? `app-tone-${stage.tone}` : ''
@@ -14,8 +15,12 @@
         <BaseIcon :name="iconFor(stage.status)" size="sm" />
       </div>
       <div class="min-w-0">
-        <div class="text-sm font-semibold text-[var(--color-text-primary)]">{{ stage.label }}</div>
-        <div class="mt-1 text-xs text-[var(--color-text-tertiary)]">{{ stage.caption }}</div>
+        <div :class="compact ? 'text-[13px] font-semibold text-[var(--color-text-primary)]' : 'text-sm font-semibold text-[var(--color-text-primary)]'">
+          {{ stage.label }}
+        </div>
+        <div :class="compact ? 'mt-0.5 text-[11px] text-[var(--color-text-tertiary)]' : 'mt-1 text-xs text-[var(--color-text-tertiary)]'">
+          {{ stage.caption }}
+        </div>
       </div>
       <div
         v-if="index < stages.length - 1"
@@ -39,6 +44,7 @@ defineProps<{
     status: WorkflowStageStatus;
     tone?: MetricTone;
   }>;
+  compact?: boolean;
 }>();
 
 function iconFor(status: WorkflowStageStatus) {

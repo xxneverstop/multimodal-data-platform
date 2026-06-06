@@ -51,3 +51,22 @@ export interface InitiateDirectUploadResponse {
   stsSecurityToken: string;
   expiration: string;
 }
+
+export interface InitiateImportUploadRequest {
+  fileName: string;
+  relativePath: string;
+  importKey: string;
+  fileSize: number;
+  contentType: string;
+}
+
+export interface InitiateImportUploadResponse {
+  bucketName: string;
+  region: string;
+  endpoint: string | null;
+  objectKey: string;
+  stsAccessKeyId: string;
+  stsAccessKeySecret: string;
+  stsSecurityToken: string;
+  expiration: string;
+}

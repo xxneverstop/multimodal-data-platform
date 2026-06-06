@@ -153,6 +153,15 @@
           <input v-model="form.actionName" class="app-input app-input-compact" />
         </label>
         <label class="block">
+          <span class="mb-1 block text-sm text-[var(--color-text-secondary)]">Profile</span>
+          <select v-model="profileIdValue" class="app-input app-input-compact">
+            <option value="" disabled>请选择 Profile</option>
+            <option v-for="profile in profiles" :key="profile.id" :value="String(profile.id)">
+              {{ profile.profileName }} ({{ profile.profileCode }})
+            </option>
+          </select>
+        </label>
+        <label class="block">
           <span class="mb-1 block text-sm text-[var(--color-text-secondary)]">采集日期</span>
           <input v-model="form.collectDate" type="date" class="app-input app-input-compact" />
         </label>
@@ -165,6 +174,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watchEffect } from "vue";
 import { useRouter } from "vue-router";
+import { fetchCollectionProfiles, type CollectionProfileResponse } from "@/api/profiles";
 import { fetchSessions } from "@/api/sessions";
 import { createTask, fetchTasks } from "@/api/tasks";
 import AppDialog from "@/components/AppDialog.vue";
@@ -206,6 +216,8 @@ const dialogOpen = ref(false);
 const submitting = ref(false);
 const message = ref("");
 const advancedOpen = ref(false);
+const profiles = ref<CollectionProfileResponse[]>([]);
+const profileIdValue = ref("");
 
 const pageState = reactive({
   page: 1,
@@ -223,6 +235,7 @@ const sortState = reactive<TaskSortState>({
 const form = reactive<CreateTaskRequest>({
   taskName: "",
   subjectCode: "",
+  profileId: null,
   actionName: "",
   deviceType: "",
   modality: "",
@@ -232,6 +245,10 @@ const form = reactive<CreateTaskRequest>({
   captureLocation: "",
   remark: "",
 });
+
+const selectedProfile = computed(
+  () => profiles.value.find((profile) => String(profile.id) === profileIdValue.value) ?? null,
+);
 
 const statusOptions = [
   { label: "已创建", value: "CREATED" },
@@ -454,6 +471,13 @@ function closeDialog() {
 }
 
 async function handleCreate() {
+  if (!selectedProfile.value) {
+    message.value = "请选择 Profile";
+    return;
+  }
+  form.profileId = selectedProfile.value.id;
+  form.deviceType = selectedProfile.value.deviceGroupCode;
+  form.modality = selectedProfile.value.modalityGroupCode;
   submitting.value = true;
   message.value = "";
   try {
@@ -470,6 +494,13 @@ async function handleCreate() {
 
 onMounted(() => {
   syncAppliedQuery();
+  void fetchCollectionProfiles().then((list) => {
+    profiles.value = list;
+    if (!profileIdValue.value && list.length > 0) {
+      profileIdValue.value = String(list[0].id);
+      form.profileId = list[0].id;
+    }
+  }).catch(() => {});
   void loadTasks();
 });
 </script>

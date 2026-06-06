@@ -6,10 +6,13 @@ import com.honortech.dataplatform.collector.service.CollectorClientService;
 import com.honortech.dataplatform.common.enums.AssetType;
 import com.honortech.dataplatform.common.enums.SessionImportStatus;
 import com.honortech.dataplatform.common.exception.BizException;
+import com.honortech.dataplatform.common.storage.ObjectStat;
 import com.honortech.dataplatform.common.storage.StorageProvider;
+import com.honortech.dataplatform.common.storage.StorageProperties;
 import com.honortech.dataplatform.common.storage.StorageRouter;
 import com.honortech.dataplatform.common.storage.StorageService;
 import com.honortech.dataplatform.common.storage.StoredFile;
+import com.honortech.dataplatform.common.storage.TemporaryCredentials;
 import com.honortech.dataplatform.common.util.BusinessCodeGenerator;
 import com.honortech.dataplatform.file.entity.DataFile;
 import com.honortech.dataplatform.file.mapper.DataFileMapper;
@@ -23,6 +26,9 @@ import com.honortech.dataplatform.profile.rule.ProfileRuleRegistry;
 import com.honortech.dataplatform.profile.service.CollectionProfileService;
 import com.honortech.dataplatform.session.entity.CollectionSession;
 import com.honortech.dataplatform.session.mapper.CollectionSessionMapper;
+import com.honortech.dataplatform.sessionimport.dto.FinalizeSessionImportRequest;
+import com.honortech.dataplatform.sessionimport.dto.FinalizeSessionImportResponse;
+import com.honortech.dataplatform.sessionimport.dto.FinalizeSessionImportUploadedFile;
 import com.honortech.dataplatform.sessionimport.dto.SessionImportRequestContext;
 import com.honortech.dataplatform.sessionimport.dto.SessionImportResponse;
 import com.honortech.dataplatform.sessionimport.entity.SessionImportRecord;
@@ -43,6 +49,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.zip.ZipEntry;
@@ -66,6 +73,7 @@ class SessionImportServiceImplTest {
     private final DataAssetService dataAssetService = Mockito.mock(DataAssetService.class);
     private final StorageRouter storageRouter = Mockito.mock(StorageRouter.class);
     private final StorageService storageService = Mockito.mock(StorageService.class);
+    private final StorageProperties storageProperties = new StorageProperties();
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final SubjectService subjectService = Mockito.mock(SubjectService.class);
     private final CollectionProfileService collectionProfileService = Mockito.mock(CollectionProfileService.class);
@@ -91,6 +99,7 @@ class SessionImportServiceImplTest {
                 acquisitionTaskMapper,
                 dataAssetService,
                 storageRouter,
+                storageProperties,
                 objectMapper,
                 subjectService,
                 collectionProfileService,
@@ -128,6 +137,9 @@ class SessionImportServiceImplTest {
         }).when(sessionMapper).insert(any(CollectionSession.class));
 
         when(storageRouter.defaultService()).thenReturn(storageService);
+        storageProperties.getOss().setBucket("mmdp-bucket");
+        storageProperties.getOss().setRegion("cn-hangzhou");
+        storageProperties.getOss().setEndpoint("oss-cn-hangzhou.aliyuncs.com");
         when(storageService.upload(any(), any(), any(), any())).thenAnswer(invocation -> new StoredFile(
                 StorageProvider.OSS,
                 "mmdp-bucket",
@@ -137,6 +149,12 @@ class SessionImportServiceImplTest {
                 invocation.getArgument(2, String.class),
                 "https://oss.example.com/mmdp-bucket/" + invocation.getArgument(0, String.class)
         ));
+        when(storageService.assumeUploadCredentials(any(), any(), any())).thenReturn(
+                new TemporaryCredentials("ak", "sk", "token", "2026-06-05T12:00:00Z")
+        );
+        when(storageService.headObject(any(), any())).thenAnswer(invocation ->
+                new ObjectStat(resolveSizeByObjectKey(invocation.getArgument(1, String.class)), "etag")
+        );
         when(sessionMapper.selectOne(any())).thenReturn(null);
         when(sessionImportRecordMapper.selectOne(any())).thenReturn(null);
         when(collectorClientService.resolveByCode(any())).thenReturn(null);
@@ -349,6 +367,77 @@ class SessionImportServiceImplTest {
         assertEquals(SessionImportStatus.FAILED.name(), lastUpdate.getStatus());
     }
 
+    @Test
+    void shouldFinalizeDirectoryImportAndCreateSessionAssets() {
+        AcquisitionTask task = new AcquisitionTask();
+        task.setId(21L);
+        task.setTaskCode("TASK-021");
+        task.setSubjectCode("S-001");
+        task.setProfileId(defaultProfile.getId());
+        task.setCollectDate(LocalDate.of(2026, 6, 5));
+        when(acquisitionTaskService.getTask(21L)).thenReturn(task);
+
+        FinalizeSessionImportResponse response = service.finalizeImport(new FinalizeSessionImportRequest(
+                21L,
+                "imp-001",
+                "imp-001",
+                objectMapper.valueToTree(Map.of(
+                        "localRefs", Map.of("localSessionId", "LS-dir-001"),
+                        "task", Map.of("name", "Walk Task", "profileCode", "BINOCULAR_HMD_IMU_V1"),
+                        "subject", Map.of("code", "S-001", "name", "Subject A"),
+                        "action", Map.of("name", "Walk"),
+                        "session", Map.of("startedAt", "2026-06-05T10:20:30", "timestampPolicy", "device"),
+                        "sources", Map.of(
+                                "imu", Map.of("path", "sources/imu/data_imu.jsonl"),
+                                "cam01", Map.of("path", "sources/cam01/video.mp4")
+                        ),
+                        "artifacts", List.of(Map.of("path", "artifacts/readme.md"))
+                )),
+                List.of(
+                        new FinalizeSessionImportUploadedFile("manifest.json", "manifest.json", "imports/21/imp-001/manifest.json", "application/json", 512L, null),
+                        new FinalizeSessionImportUploadedFile("data_imu.jsonl", "sources/imu/data_imu.jsonl", "imports/21/imp-001/sources/imu/data_imu.jsonl", "application/json", 128L, null),
+                        new FinalizeSessionImportUploadedFile("video.mp4", "sources/cam01/video.mp4", "imports/21/imp-001/sources/cam01/video.mp4", "video/mp4", 2048L, null),
+                        new FinalizeSessionImportUploadedFile("readme.md", "artifacts/readme.md", "imports/21/imp-001/artifacts/readme.md", "text/markdown", 64L, null)
+                )
+        ));
+
+        assertEquals(false, response.existing());
+        assertEquals(SessionImportStatus.IMPORTED.name(), response.status());
+        assertEquals(4, response.createdFileCount());
+        assertEquals(2, response.createdAssetCount());
+        verify(sessionMapper).insert(any(CollectionSession.class));
+        verify(dataFileMapper, Mockito.times(4)).insert(any(DataFile.class));
+        verify(dataAssetService, Mockito.times(2)).createAcquisitionAsset(eq(21L), any(), any(), any(), any(AssetType.class));
+    }
+
+    @Test
+    void shouldRejectDirectoryImportWhenSubjectCodeConflicts() {
+        AcquisitionTask task = new AcquisitionTask();
+        task.setId(22L);
+        task.setSubjectCode("S-002");
+        task.setProfileId(defaultProfile.getId());
+        task.setCollectDate(LocalDate.of(2026, 6, 5));
+        when(acquisitionTaskService.getTask(22L)).thenReturn(task);
+
+        assertThrows(BizException.class, () -> service.finalizeImport(new FinalizeSessionImportRequest(
+                22L,
+                "imp-002",
+                "imp-002",
+                objectMapper.valueToTree(Map.of(
+                        "localRefs", Map.of("localSessionId", "LS-dir-002"),
+                        "task", Map.of("profileCode", "BINOCULAR_HMD_IMU_V1"),
+                        "subject", Map.of("code", "S-001"),
+                        "action", Map.of("name", "Walk"),
+                        "session", Map.of("startedAt", "2026-06-05T10:20:30", "timestampPolicy", "device"),
+                        "sources", Map.of("imu", Map.of("path", "sources/imu/data_imu.jsonl"))
+                )),
+                List.of(
+                        new FinalizeSessionImportUploadedFile("manifest.json", "manifest.json", "imports/22/imp-002/manifest.json", "application/json", 256L, null),
+                        new FinalizeSessionImportUploadedFile("data_imu.jsonl", "sources/imu/data_imu.jsonl", "imports/22/imp-002/sources/imu/data_imu.jsonl", "application/json", 128L, null)
+                )
+        )));
+    }
+
     private CollectionProfileSource source(String sourceKey, String filePattern, String assetType, String sourceType) {
         CollectionProfileSource source = new CollectionProfileSource();
         source.setProfileId(defaultProfile.getId());
@@ -375,5 +464,21 @@ class SessionImportServiceImplTest {
             }
         }
         return outputStream.toByteArray();
+    }
+
+    private long resolveSizeByObjectKey(String objectKey) {
+        if (objectKey.endsWith("manifest.json")) {
+            return 512L;
+        }
+        if (objectKey.endsWith("data_imu.jsonl")) {
+            return 128L;
+        }
+        if (objectKey.endsWith("video.mp4")) {
+            return 2048L;
+        }
+        if (objectKey.endsWith("readme.md")) {
+            return 64L;
+        }
+        return 1L;
     }
 }
