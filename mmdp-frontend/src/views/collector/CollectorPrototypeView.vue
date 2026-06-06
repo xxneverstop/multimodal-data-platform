@@ -169,6 +169,15 @@
             <input v-model="newTaskForm.actionName" class="app-input app-input-compact w-full" placeholder="walking" />
           </label>
           <label class="block">
+            <span class="mb-1 block text-xs text-slate-500">Profile <span class="text-red-400">*</span></span>
+            <select v-model="newTaskProfileId" class="app-input app-input-compact w-full">
+              <option value="" disabled>请选择 Profile</option>
+              <option v-for="profile in profiles" :key="profile.id" :value="String(profile.id)">
+                {{ profile.profileName }} ({{ profile.profileCode }})
+              </option>
+            </select>
+          </label>
+          <label class="block">
             <span class="mb-1 block text-xs text-slate-500">采集日期</span>
             <input v-model="newTaskForm.collectDate" type="date" class="app-input app-input-compact w-full" />
           </label>
@@ -347,6 +356,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from "vue";
+import { fetchCollectionProfiles, type CollectionProfileResponse } from "@/api/profiles";
 import BaseButton from "@/components/BaseButton.vue";
 import PageCard from "@/components/PageCard.vue";
 import PageHeader from "@/components/PageHeader.vue";
@@ -390,6 +400,7 @@ const logContainer = ref<HTMLElement | null>(null);
 
 // Task selector
 const tasks = ref<TaskResponse[]>([]);
+const profiles = ref<CollectionProfileResponse[]>([]);
 const selectedTaskId = ref<number | null>(null);
 const savedSessionIds = ref<string[]>([]);
 const savingSession = ref(false);
@@ -435,6 +446,7 @@ const uploadBlockedReason = computed(() => {
   return "";
 });
 const showNewTaskDialog = ref(false);
+const newTaskProfileId = ref("");
 const newTaskForm = reactive({
   taskName: "",
   subjectCode: "",
@@ -556,14 +568,20 @@ async function refreshSavedSessions() {
 
 async function handleCreateTask() {
   if (!newTaskForm.taskName.trim()) return;
+  const profile = profiles.value.find((item) => String(item.id) === newTaskProfileId.value);
+  if (!profile) {
+    errorMsg.value = "请选择 Profile";
+    return;
+  }
   creatingTask.value = true;
   try {
     const created = await createTask({
       taskName: newTaskForm.taskName.trim(),
       subjectCode: newTaskForm.subjectCode.trim(),
       actionName: newTaskForm.actionName.trim(),
-      deviceType: newTaskForm.deviceType,
-      modality: newTaskForm.modality,
+      profileId: profile.id,
+      deviceType: profile.deviceGroupCode,
+      modality: profile.modalityGroupCode,
       collectDate: newTaskForm.collectDate,
       remark: newTaskForm.remark.trim() || "-"
     });
@@ -914,6 +932,17 @@ function emptyStatus(): RealtimeStatus {
 // ── Lifecycle ──────────────────────────────────────────────────────────
 
 onMounted(async () => {
+  try {
+    profiles.value = await fetchCollectionProfiles();
+    if (!newTaskProfileId.value && profiles.value.length > 0) {
+      const profile = profiles.value[0];
+      newTaskProfileId.value = String(profile.id);
+      newTaskForm.deviceType = profile.deviceGroupCode;
+      newTaskForm.modality = profile.modalityGroupCode;
+    }
+  } catch {
+    profiles.value = [];
+  }
   try { devices.value = await fetchDevices(); } catch { /* offline */ }
   try { const cur = await fetchCurrentSession(); if (cur) Object.assign(status, cur); } catch { /* offline */ }
   await fetchTaskList();

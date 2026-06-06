@@ -3,6 +3,9 @@
 # 多模态数据平台（MMDP）
 MMDP 是多模态数据平台的最小可行产品代码仓库，采用 **Vue 前端 + Spring Boot 后端** 技术架构。
 
+## 会话语言
+所有问答、代码注释、文档均使用**中文**。技术术语（如 API、DTO、Mapper）保留英文原名。
+
 ## 仓库目录结构
 - mmdp-frontend/：Vue 3 + Vite 前端项目
 - mmdp-backend/：Spring Boot 后端项目

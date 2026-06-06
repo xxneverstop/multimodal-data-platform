@@ -3,7 +3,7 @@
     <PageHeader
       eyebrow="任务 Workspace"
       :title="detail.task.taskName"
-      description="围绕任务当前阶段、健康状态、采集产出和下一步动作组织的工作台。"
+      description="任务页聚焦管理当前任务下的采集进展。"
       surface="plain"
     >
       <template #actions>
@@ -17,59 +17,39 @@
 
     <WorkspaceOverviewBar :items="overviewItems" :secondary="overviewSecondary" />
 
-    <PageCard eyebrow="健康摘要" title="当前任务是否健康" description="快速判断当前任务下的异常、待处理和最近质检导出情况。">
-      <WorkspaceHealthSummary :items="healthItems" />
-    </PageCard>
+    <div class="grid gap-3 xl:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)]">
+      <section class="workspace-section-secondary">
+        <div class="mb-2 text-[11px] font-medium tracking-[0.08em] text-[var(--color-text-tertiary)]">进度状态</div>
+        <WorkflowTimeline :stages="taskStages" compact />
+      </section>
 
-    <PageCard eyebrow="阶段进度" title="任务当前处于什么阶段" description="沿着任务、采集、资产、处理、质检和导出的主线理解当前所处位置。">
-      <WorkflowTimeline :stages="taskStages" />
-    </PageCard>
+      <section class="workspace-section-secondary">
+        <div class="mb-2 text-[11px] font-medium tracking-[0.08em] text-[var(--color-text-tertiary)]">健康提示</div>
+        <WorkspaceHealthSummary :items="compactHealthItems" compact />
+      </section>
+    </div>
 
-    <section class="space-y-3">
-      <div class="flex items-end justify-between gap-3">
-        <div>
-          <div class="text-[11px] font-medium tracking-[0.08em] text-[var(--color-text-tertiary)]">规模概览</div>
-          <h2 class="mt-1 text-[17px] font-semibold text-[var(--color-text-primary)]">任务产出规模</h2>
-        </div>
-      </div>
-      <BusinessMetrics :items="metricItems" />
-    </section>
+    <BusinessMetrics :items="metricItems" />
 
-    <PageCard eyebrow="近期动态" title="Recent Sessions" description="先看最近发生了什么，再进入完整采集工作区。">
-      <div v-if="recentSessions.length" class="grid gap-3 xl:grid-cols-3">
+    <PageCard eyebrow="核心工作区" title="Session Workspace" description="这是任务页唯一核心区，直接管理这个任务下的采集进展。">
+      <div v-if="sortedSessions.length" class="space-y-2">
         <article
-          v-for="session in recentSessions"
-          :key="session.sessionId"
-          class="workspace-secondary-row app-tone-task"
-        >
-          <div class="min-w-0 space-y-1">
-            <div class="app-summary-title-strong">{{ session.sessionCode || session.sessionId }}</div>
-            <div class="app-summary-subtitle-muted">{{ session.sourceSummary || session.modality || "暂无数据类型摘要" }}</div>
-            <div class="app-summary-stat-inline">
-              <span>资产 <strong>{{ session.assetCount }}</strong></span>
-              <span>文件 <strong>{{ session.fileCount }}</strong></span>
-              <span>更新 {{ sessionUpdatedAt(session) }}</span>
-            </div>
-          </div>
-          <div class="app-status-stack">
-            <StatusBadge :status="session.qcStatus" />
-          </div>
-        </article>
-      </div>
-      <div v-else class="workspace-muted-empty">当前任务下还没有可展示的采集会话。</div>
-    </PageCard>
-
-    <PageCard eyebrow="核心产出" title="Session Workspace List" description="任务的主要产出是 Session，这里按工作台视角查看每个采集的状态、健康度和下一步入口。">
-      <div v-if="sortedSessions.length" class="space-y-3">
-        <article
-          v-for="session in sortedSessions"
+          v-for="(session, index) in sortedSessions"
           :key="session.sessionId"
           class="workspace-core-row app-row-accent-task"
         >
           <div class="min-w-0 flex-1 space-y-2">
             <div class="flex flex-wrap items-center gap-2">
               <div class="app-summary-title-strong">{{ session.sessionCode || session.sessionId }}</div>
-              <span class="rounded-full border border-[var(--module-task-soft-border)] bg-[var(--module-task-soft-bg)] px-2 py-0.5 text-[11px] font-medium text-[var(--module-task-soft-text)]">
+              <span
+                v-if="index === 0"
+                class="rounded-full border border-[var(--module-task-soft-border)] bg-[var(--module-task-soft-bg)] px-2 py-0.5 text-[11px] font-medium text-[var(--module-task-soft-text)]"
+              >
+                最近更新
+              </span>
+              <span
+                class="rounded-full border border-[var(--module-task-soft-border)] bg-[var(--module-task-soft-bg)] px-2 py-0.5 text-[11px] font-medium text-[var(--module-task-soft-text)]"
+              >
                 {{ sessionHealthLabel(session) }}
               </span>
             </div>
@@ -105,17 +85,25 @@
       <div v-else class="workspace-muted-empty">当前任务尚未产出采集会话，建议先上传数据或进入采集流程。</div>
     </PageCard>
 
-    <PageCard eyebrow="相关处理" title="Related Processing" description="这些采集后续是否进入处理链路，以及最近发生了哪些处理作业。">
-      <RelatedProcessingPanel :items="processingItems" empty-text="当前任务尚未进入处理阶段。" />
-    </PageCard>
+    <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <section class="workspace-section-secondary">
+        <div class="mb-3 text-[11px] font-medium tracking-[0.08em] text-[var(--color-text-tertiary)]">下一步</div>
+        <NextActionsPanel :actions="nextActions" />
+      </section>
 
-    <PageCard eyebrow="下一步" title="Next Actions" description="根据当前任务的阶段和健康状态，给出最值得执行的后续动作。">
-      <NextActionsPanel :actions="nextActions" />
-    </PageCard>
+      <div class="space-y-3">
+        <WorkspaceDisclosure title="Related Processing" :summary="processingSummary">
+          <RelatedProcessingPanel
+            :items="processingItems"
+            empty-text="当前任务尚未进入处理阶段。"
+          />
+        </WorkspaceDisclosure>
 
-    <PageCard eyebrow="元数据" title="Task Metadata" description="基础记录信息下沉到页面底部，避免与工作台主线争夺注意力。" secondary>
-      <WorkspaceMetadataGrid :items="metadataItems" />
-    </PageCard>
+        <WorkspaceDisclosure title="Metadata" :summary="metadataSummary">
+          <WorkspaceMetadataGrid :items="metadataItems" />
+        </WorkspaceDisclosure>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -131,6 +119,7 @@ import PageHeader from "@/components/PageHeader.vue";
 import RelatedProcessingPanel from "@/components/RelatedProcessingPanel.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 import WorkflowTimeline, { type WorkflowStageStatus } from "@/components/WorkflowTimeline.vue";
+import WorkspaceDisclosure from "@/components/WorkspaceDisclosure.vue";
 import WorkspaceHealthSummary from "@/components/WorkspaceHealthSummary.vue";
 import WorkspaceMetadataGrid from "@/components/WorkspaceMetadataGrid.vue";
 import WorkspaceOverviewBar from "@/components/WorkspaceOverviewBar.vue";
@@ -149,8 +138,6 @@ const sortedSessions = computed(() =>
     latestTime(right.startedAt, right.createdAt).localeCompare(latestTime(left.startedAt, left.createdAt)),
   ),
 );
-
-const recentSessions = computed(() => sortedSessions.value.slice(0, 3));
 
 const overviewItems = computed(() => {
   const task = detail.value?.task;
@@ -189,36 +176,60 @@ const pendingSessions = computed(() =>
 const latestReportStatus = computed(() => detail.value?.reports?.[0]?.qcStatus || detail.value?.task.status || "PENDING");
 const readyExportCount = computed(() => sortedSessions.value.filter((session) => session.exportStatus === "READY").length);
 
-const healthItems = computed(() => [
-  {
-    label: "异常采集数",
-    value: abnormalSessions.value.length,
-    caption: abnormalSessions.value.length ? "建议优先查看异常采集与质检结果。" : "当前没有明显异常采集。",
-    icon: "shield-alert",
-    tone: "qc" as const,
-  },
-  {
-    label: "待处理采集数",
-    value: pendingSessions.value.length,
-    caption: pendingSessions.value.length ? "仍有采集处于待处理或处理中。" : "当前采集处理链路较为顺畅。",
-    icon: "clock",
-    tone: "process" as const,
-  },
-  {
-    label: "最近 QC 状态",
-    value: formatStatusLabel(latestReportStatus.value),
-    caption: "基于最近一次质检报告或任务状态推导。",
-    icon: "clipboard-check",
-    tone: "qc" as const,
-  },
-  {
-    label: "导出可用采集",
-    value: `${readyExportCount.value}/${sortedSessions.value.length || 0}`,
-    caption: readyExportCount.value ? "已有采集具备导出条件。" : "当前尚无 READY 导出采集。",
-    icon: "download",
-    tone: "export" as const,
-  },
-]);
+const compactHealthItems = computed<
+  Array<{
+    label: string;
+    value: string | number;
+    caption: string;
+    icon: string;
+    tone: "qc" | "export" | "process";
+  }>
+>(() => {
+  const items: Array<{
+    label: string;
+    value: string | number;
+    caption: string;
+    icon: string;
+    tone: "qc" | "export" | "process";
+  }> = [
+    {
+      label: "最近 QC",
+      value: formatStatusLabel(latestReportStatus.value),
+      caption: "基于最近一次质检状态",
+      icon: "clipboard-check",
+      tone: "qc" as const,
+    },
+    {
+      label: "导出可用",
+      value: `${readyExportCount.value}/${sortedSessions.value.length || 0}`,
+      caption: readyExportCount.value ? "已有可导出采集" : "暂无 READY 采集",
+      icon: "download",
+      tone: "export" as const,
+    },
+  ];
+
+  if (abnormalSessions.value.length > 0) {
+    items.unshift({
+      label: "异常采集",
+      value: abnormalSessions.value.length,
+      caption: "建议优先排查异常采集",
+      icon: "shield-alert",
+      tone: "qc" as const,
+    });
+  }
+
+  if (pendingSessions.value.length > 0) {
+    items.push({
+      label: "待处理采集",
+      value: pendingSessions.value.length,
+      caption: "仍有采集处于待处理阶段",
+      icon: "clock",
+      tone: "process" as const,
+    });
+  }
+
+  return items.slice(0, 4);
+});
 
 const taskStages = computed<
   Array<{ label: string; caption: string; status: WorkflowStageStatus; tone?: "task" | "session" | "asset" | "process" | "qc" | "export" }>
@@ -232,34 +243,34 @@ const taskStages = computed<
   const exportReady = readyExportCount.value > 0;
 
   return [
-    { label: "Task Created", caption: "任务容器已建立", status: "done" as const, tone: "task" as const },
+    { label: "任务已创建", caption: "工作容器已建立", status: "done" as const, tone: "task" as const },
     {
-      label: "Sessions Collected",
-      caption: hasSessions ? `${sortedSessions.value.length} 个采集已关联` : "等待采集进入",
+      label: "采集进入",
+      caption: hasSessions ? `${sortedSessions.value.length} 个采集` : "等待采集",
       status: (hasSessions ? "done" : "current") as WorkflowStageStatus,
       tone: "session" as const,
     },
     {
-      label: "Assets Registered",
-      caption: hasAssets ? `${detail.value?.assets.length ?? 0} 个资产已登记` : "等待资产进入平台",
+      label: "资产登记",
+      caption: hasAssets ? `${detail.value?.assets.length ?? 0} 个资产` : "等待资产进入",
       status: (hasAssets ? "done" : hasSessions ? "current" : "waiting") as WorkflowStageStatus,
       tone: "asset" as const,
     },
     {
-      label: "Processing Running",
-      caption: hasJobs ? `${detail.value?.jobs.length ?? 0} 条处理记录` : "当前尚无处理作业",
+      label: "处理链路",
+      caption: hasJobs ? `${detail.value?.jobs.length ?? 0} 条记录` : "暂无处理",
       status: (runningJobs ? "current" : hasJobs ? "done" : "waiting") as WorkflowStageStatus,
       tone: "process" as const,
     },
     {
-      label: "QC Reviewed",
-      caption: hasReports ? `${detail.value?.reports.length ?? 0} 条质检结果` : "等待质检结果",
+      label: "质检",
+      caption: hasReports ? `${detail.value?.reports.length ?? 0} 条结果` : "等待质检",
       status: (hasRisk ? "risk" : hasReports ? "done" : "waiting") as WorkflowStageStatus,
       tone: "qc" as const,
     },
     {
-      label: "Export Ready",
-      caption: exportReady ? `${readyExportCount.value} 个采集可导出` : "尚未形成可导出结果",
+      label: "导出",
+      caption: exportReady ? `${readyExportCount.value} 个可导出` : "尚未就绪",
       status: (exportReady ? "done" : hasRisk ? "risk" : "waiting") as WorkflowStageStatus,
       tone: "export" as const,
     },
@@ -268,7 +279,6 @@ const taskStages = computed<
 
 const metricItems = computed<MetricItem[]>(() => {
   const assets = detail.value?.assets ?? [];
-  const fileCount = assets.filter((asset) => asset.rawAsset.fileId != null).length;
   const lastUpdated = latestTimestamp([
     detail.value?.task.createdAt,
     ...sortedSessions.value.map((session) => latestTime(session.startedAt, session.createdAt)),
@@ -277,10 +287,9 @@ const metricItems = computed<MetricItem[]>(() => {
   ]);
 
   return [
-    { label: "采集总数", value: sortedSessions.value.length, caption: "当前任务下已识别的 Session 数量", icon: "camera", tone: "session" },
-    { label: "资产总数", value: assets.length, caption: "当前任务已登记的全部资产", icon: "database", tone: "asset" },
-    { label: "文件总数", value: fileCount, caption: "已关联实体文件的资产记录数", icon: "file", tone: "upload" },
-    { label: "最后更新时间", value: lastUpdated || "-", caption: "基于任务、采集、处理和质检时间推导", icon: "clock", tone: "task" },
+    { label: "采集数", value: sortedSessions.value.length, caption: "当前任务下已识别的 Session 数量", icon: "camera", tone: "session" },
+    { label: "资产数", value: assets.length, caption: "当前任务已登记的全部资产", icon: "database", tone: "asset" },
+    { label: "最近更新时间", value: lastUpdated || "-", caption: "基于任务、采集、处理和质检时间推导", icon: "clock", tone: "task" },
   ];
 });
 
@@ -296,6 +305,14 @@ const processingItems = computed(() =>
       to: "/processing",
     })),
 );
+
+const processingSummary = computed(() => {
+  if (processingItems.value.length) {
+    const latest = processingItems.value[0];
+    return `${processingItems.value.length} 条处理记录 · 最近 ${latest.status ? formatStatusLabel(latest.status) : "已更新"}`;
+  }
+  return "当前任务尚未进入处理阶段";
+});
 
 const nextActions = computed(() => {
   if (!detail.value) {
@@ -391,6 +408,11 @@ const metadataItems = computed(() => {
     { label: "创建人", value: task?.operatorName || "-" },
     { label: "备注", value: task?.remark || "-" },
   ];
+});
+
+const metadataSummary = computed(() => {
+  const task = detail.value?.task;
+  return `任务编号 ${task?.taskCode || task?.id || "-"} · 创建时间 ${formatDateTime(task?.createdAt)}`;
 });
 
 function latestTime(primary?: string | null, fallback?: string | null) {

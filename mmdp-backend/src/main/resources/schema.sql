@@ -253,5 +253,6 @@ CREATE TABLE IF NOT EXISTS session_import_record (
     CONSTRAINT fk_session_import_record_collector_client FOREIGN KEY (collector_client_id) REFERENCES collector_client(id),
     CONSTRAINT fk_session_import_record_archive_file FOREIGN KEY (archive_file_id) REFERENCES data_file(id),
     UNIQUE INDEX idx_session_import_local_session_id (local_session_id),
-    INDEX idx_import_collector_client_id (collector_client_id)
+    INDEX idx_import_collector_client_id (collector_client_id),
+    INDEX idx_import_task_request_id (task_id, request_id)
 ) COMMENT='Session导入记录表';

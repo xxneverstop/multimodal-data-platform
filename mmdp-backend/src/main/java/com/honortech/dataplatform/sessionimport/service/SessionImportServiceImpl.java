@@ -11,8 +11,11 @@ import com.honortech.dataplatform.common.enums.FileUploadStatus;
 import com.honortech.dataplatform.common.enums.SessionImportStatus;
 import com.honortech.dataplatform.common.enums.TaskStatus;
 import com.honortech.dataplatform.common.exception.BizException;
+import com.honortech.dataplatform.common.storage.ObjectStat;
+import com.honortech.dataplatform.common.storage.StorageProperties;
 import com.honortech.dataplatform.common.storage.StorageRouter;
 import com.honortech.dataplatform.common.storage.StoredFile;
+import com.honortech.dataplatform.common.storage.TemporaryCredentials;
 import com.honortech.dataplatform.common.util.BusinessCodeGenerator;
 import com.honortech.dataplatform.common.util.FileNameUtils;
 import com.honortech.dataplatform.file.entity.DataFile;
@@ -26,6 +29,11 @@ import com.honortech.dataplatform.profile.rule.ProfileRuleRegistry;
 import com.honortech.dataplatform.profile.service.CollectionProfileService;
 import com.honortech.dataplatform.session.entity.CollectionSession;
 import com.honortech.dataplatform.session.mapper.CollectionSessionMapper;
+import com.honortech.dataplatform.sessionimport.dto.FinalizeSessionImportRequest;
+import com.honortech.dataplatform.sessionimport.dto.FinalizeSessionImportResponse;
+import com.honortech.dataplatform.sessionimport.dto.FinalizeSessionImportUploadedFile;
+import com.honortech.dataplatform.sessionimport.dto.InitiateImportUploadRequest;
+import com.honortech.dataplatform.sessionimport.dto.InitiateImportUploadResponse;
 import com.honortech.dataplatform.sessionimport.dto.NormalizedSessionManifest;
 import com.honortech.dataplatform.sessionimport.dto.SessionImportRequestContext;
 import com.honortech.dataplatform.sessionimport.dto.SessionImportResponse;
@@ -40,6 +48,7 @@ import com.honortech.dataplatform.task.service.AcquisitionTaskService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayInputStream;
@@ -55,6 +64,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -74,6 +84,7 @@ public class SessionImportServiceImpl implements SessionImportService {
     private final AcquisitionTaskMapper acquisitionTaskMapper;
     private final DataAssetService dataAssetService;
     private final StorageRouter storageRouter;
+    private final StorageProperties storageProperties;
     private final ObjectMapper objectMapper;
     private final SubjectService subjectService;
     private final CollectionProfileService collectionProfileService;
@@ -89,6 +100,7 @@ public class SessionImportServiceImpl implements SessionImportService {
             AcquisitionTaskMapper acquisitionTaskMapper,
             DataAssetService dataAssetService,
             StorageRouter storageRouter,
+            StorageProperties storageProperties,
             ObjectMapper objectMapper,
             SubjectService subjectService,
             CollectionProfileService collectionProfileService,
@@ -102,6 +114,7 @@ public class SessionImportServiceImpl implements SessionImportService {
         this.acquisitionTaskMapper = acquisitionTaskMapper;
         this.dataAssetService = dataAssetService;
         this.storageRouter = storageRouter;
+        this.storageProperties = storageProperties;
         this.objectMapper = objectMapper;
         this.subjectService = subjectService;
         this.collectionProfileService = collectionProfileService;
@@ -174,8 +187,142 @@ public class SessionImportServiceImpl implements SessionImportService {
         }
     }
 
+    @Override
+    public InitiateImportUploadResponse initiateImportUpload(Long taskId, InitiateImportUploadRequest request) {
+        acquisitionTaskService.getTask(taskId);
+        String normalizedRelativePath = normalizeEntryPath(request.relativePath());
+        if (!firstNonBlank(request.fileName(), "").equals(fileName(normalizedRelativePath))) {
+            throw new BizException("fileName does not match relativePath filename");
+        }
+        String objectKey = buildImportObjectKey(taskId, request.importKey(), normalizedRelativePath);
+        TemporaryCredentials credentials = storageRouter.defaultService().assumeUploadCredentials(
+                storageProperties.getOss().getBucket(),
+                objectKey,
+                buildImportRoleSessionName(taskId, request.importKey(), normalizedRelativePath)
+        );
+        return new InitiateImportUploadResponse(
+                storageProperties.getOss().getBucket(),
+                storageProperties.getOss().getRegion(),
+                storageProperties.getOss().getEndpoint(),
+                objectKey,
+                credentials.accessKeyId(),
+                credentials.accessKeySecret(),
+                credentials.securityToken(),
+                credentials.expiration()
+        );
+    }
+
+    @Override
+    @Transactional
+    public FinalizeSessionImportResponse finalizeImport(FinalizeSessionImportRequest request) {
+        AcquisitionTask task = acquisitionTaskService.getTask(request.taskId());
+        NormalizedSessionManifest manifest = normalizeManifest(request.manifest());
+        String requestKey = firstNonBlank(request.requestId(), request.importKey());
+
+        SessionImportRecord existingByRequest = findImportRecordByTaskIdAndRequestId(task.getId(), requestKey);
+        if (existingByRequest != null && SessionImportStatus.IMPORTED.name().equals(existingByRequest.getStatus())) {
+            CollectionSession existingSession = existingByRequest.getSessionRecordId() == null
+                    ? null
+                    : sessionMapper.selectById(existingByRequest.getSessionRecordId());
+            return toFinalizeResponse(existingByRequest, task, existingSession, manifest, true, 0, 0);
+        }
+
+        CollectionSession existingSession = findSessionByLocalSessionId(manifest.localSessionId());
+        if (existingSession != null) {
+            if (!existingSession.getTaskId().equals(task.getId())) {
+                throw new BizException("localSessionId already imported under another task");
+            }
+            SessionImportRecord existingRecord = existingByRequest != null
+                    ? existingByRequest
+                    : ensureImportRecordForExistingSession(existingSession, manifest, SOURCE_ENDPOINT_SESSION_IMPORTS);
+            existingRecord.setRequestId(requestKey);
+            existingRecord.setUpdatedAt(LocalDateTime.now());
+            sessionImportRecordMapper.updateById(existingRecord);
+            return toFinalizeResponse(existingRecord, task, existingSession, manifest, true, 0, 0);
+        }
+
+        CollectionProfile profile = resolveProfile(task, manifest);
+        validateTaskConsistency(task, profile, manifest);
+        validateUploadedFiles(request, task.getId());
+
+        CollectorClient collectorClient = collectorClientService.resolveByCode(manifest.clientId());
+        Subject subject = subjectService.resolveSubject(manifest.subjectCode(), manifest.subjectName());
+        SessionImportRecord importRecord = existingByRequest != null
+                ? prepareRetryImportRecord(existingByRequest, manifest, requestKey)
+                : createImportRecord(task, manifest, collectorClient, SOURCE_ENDPOINT_SESSION_IMPORTS, requestKey);
+
+        try {
+            updateImportRecord(importRecord, SessionImportStatus.PROCESSING, "Processing session directory import");
+
+            List<CollectionProfileSource> profileSources = collectionProfileService.listSourcesByProfileId(profile.getId());
+            Map<String, CollectionProfileSource> sourceByKey = toSourceMap(profileSources);
+            Map<String, UploadedObjectRef> uploadedByPath = toUploadedMap(request.uploadedFiles());
+
+            validateDirectoryManifest(profile, manifest, profileSources, uploadedByPath);
+
+            CollectionSession session = createSessionRecord(task, subject, profile, collectorClient, manifest);
+            importRecord.setSessionRecordId(session.getId());
+            sessionImportRecordMapper.updateById(importRecord);
+
+            int createdFileCount = 0;
+            int createdAssetCount = 0;
+
+            UploadedObjectRef manifestFile = uploadedByPath.get("manifest.json");
+            if (manifestFile != null) {
+                createImportedDataFile(task.getId(), session.getId(), "SESSION_MANIFEST", null, manifestFile, AssetType.OTHER);
+                createdFileCount += 1;
+            }
+
+            JsonNode sourcesNode = manifest.sources();
+            Iterator<String> fieldNames = sourcesNode.fieldNames();
+            while (fieldNames.hasNext()) {
+                String sourceKey = fieldNames.next();
+                UploadedObjectRef file = uploadedByPath.get(normalizeEntryPath(requiredSourcePath(sourceKey, sourcesNode.get(sourceKey))));
+                CollectionProfileSource profileSource = sourceByKey.get(sourceKey.toLowerCase(Locale.ROOT));
+                DataFile dataFile = createImportedDataFile(
+                        task.getId(),
+                        session.getId(),
+                        "EXTRACTED_STRUCTURED",
+                        sourceKey,
+                        file,
+                        AssetType.fromNullable(profileSource.getParsedAssetType())
+                );
+                dataAssetService.createAcquisitionAsset(
+                        task.getId(),
+                        session.getId(),
+                        sourceKey,
+                        dataFile,
+                        AssetType.fromNullable(profileSource.getParsedAssetType())
+                );
+                createdFileCount += 1;
+                createdAssetCount += 1;
+            }
+
+            for (String artifactPath : collectArtifactPaths(manifest.artifacts())) {
+                UploadedObjectRef file = uploadedByPath.get(artifactPath);
+                createImportedDataFile(task.getId(), session.getId(), "SESSION_ARTIFACT", null, file, AssetType.OTHER);
+                createdFileCount += 1;
+            }
+
+            session.setUploadStatus(SessionImportStatus.IMPORTED.name());
+            session.setSessionStatus("PLAYABLE");
+            session.setUpdatedAt(LocalDateTime.now());
+            sessionMapper.updateById(session);
+            acquisitionTaskService.updateStatus(task.getId(), TaskStatus.UPLOADED);
+            updateImportRecord(importRecord, SessionImportStatus.IMPORTED, "Session imported");
+            return toFinalizeResponse(importRecord, task, session, manifest, false, createdFileCount, createdAssetCount);
+        } catch (RuntimeException exception) {
+            updateImportRecord(importRecord, SessionImportStatus.FAILED, exception.getMessage());
+            throw exception;
+        }
+    }
+
     private NormalizedSessionManifest normalizeManifest(MultipartFile manifestFile) {
         JsonNode manifest = parseManifest(manifestFile);
+        return normalizeManifest(manifest);
+    }
+
+    private NormalizedSessionManifest normalizeManifest(JsonNode manifest) {
         JsonNode localRefs = nodeOrNull(manifest, "localRefs");
         JsonNode platformRefs = nodeOrNull(manifest, "platformRefs");
         JsonNode task = nodeOrNull(manifest, "task");
@@ -317,6 +464,15 @@ public class SessionImportServiceImpl implements SessionImportService {
             NormalizedSessionManifest manifest,
             CollectorClient collectorClient,
             String sourceEndpoint) {
+        return createImportRecord(task, manifest, collectorClient, sourceEndpoint, UUID.randomUUID().toString());
+    }
+
+    private SessionImportRecord createImportRecord(
+            AcquisitionTask task,
+            NormalizedSessionManifest manifest,
+            CollectorClient collectorClient,
+            String sourceEndpoint,
+            String requestId) {
         SessionImportRecord record = new SessionImportRecord();
         record.setTaskId(task.getId());
         record.setCollectorClientId(collectorClient == null ? null : collectorClient.getId());
@@ -325,7 +481,7 @@ public class SessionImportServiceImpl implements SessionImportService {
         record.setStatus(SessionImportStatus.RECEIVED.name());
         record.setManifestJson(toJson(manifest.rawManifest()));
         record.setSourceEndpoint(sourceEndpoint);
-        record.setRequestId(UUID.randomUUID().toString());
+        record.setRequestId(requestId);
         record.setMessage("Import received");
         record.setCreatedAt(LocalDateTime.now());
         record.setUpdatedAt(LocalDateTime.now());
@@ -355,6 +511,21 @@ public class SessionImportServiceImpl implements SessionImportService {
         record.setUpdatedAt(LocalDateTime.now());
         sessionImportRecordMapper.insert(record);
         return record;
+    }
+
+    private SessionImportRecord prepareRetryImportRecord(
+            SessionImportRecord existingRecord,
+            NormalizedSessionManifest manifest,
+            String requestId) {
+        existingRecord.setLocalTaskId(manifest.localTaskId());
+        existingRecord.setLocalSessionId(manifest.localSessionId());
+        existingRecord.setManifestJson(toJson(manifest.rawManifest()));
+        existingRecord.setRequestId(requestId);
+        existingRecord.setStatus(SessionImportStatus.RECEIVED.name());
+        existingRecord.setMessage("Import received");
+        existingRecord.setUpdatedAt(LocalDateTime.now());
+        sessionImportRecordMapper.updateById(existingRecord);
+        return existingRecord;
     }
 
     private void updateImportRecord(SessionImportRecord record, SessionImportStatus status, String message) {
@@ -546,6 +717,216 @@ public class SessionImportServiceImpl implements SessionImportService {
                 .eq(SessionImportRecord::getLocalSessionId, localSessionId));
     }
 
+    private SessionImportRecord findImportRecordByTaskIdAndRequestId(Long taskId, String requestId) {
+        if (isBlank(requestId)) {
+            return null;
+        }
+        return sessionImportRecordMapper.selectOne(new LambdaQueryWrapper<SessionImportRecord>()
+                .eq(SessionImportRecord::getTaskId, taskId)
+                .eq(SessionImportRecord::getRequestId, requestId));
+    }
+
+    private void validateTaskConsistency(AcquisitionTask task, CollectionProfile profile, NormalizedSessionManifest manifest) {
+        if (!profile.getProfileCode().equalsIgnoreCase(firstNonBlank(manifest.profileCode(), ""))) {
+            throw new BizException("Manifest profileCode does not match task profile");
+        }
+        if (!task.getSubjectCode().equalsIgnoreCase(firstNonBlank(manifest.subjectCode(), ""))) {
+            throw new BizException("Manifest subject.code does not match task subjectCode");
+        }
+    }
+
+    private void validateUploadedFiles(FinalizeSessionImportRequest request, Long taskId) {
+        String expectedPrefix = "imports/" + taskId + "/" + request.importKey() + "/";
+        boolean hasManifest = false;
+        for (FinalizeSessionImportUploadedFile file : request.uploadedFiles()) {
+            String relativePath = normalizeEntryPath(file.relativePath());
+            if ("manifest.json".equals(relativePath)) {
+                hasManifest = true;
+            }
+            if (!file.objectKey().startsWith(expectedPrefix)) {
+                throw new BizException("Uploaded object key does not belong to current importKey: " + file.objectKey());
+            }
+        }
+        if (!hasManifest) {
+            throw new BizException("Uploaded directory must include manifest.json");
+        }
+    }
+
+    private Map<String, CollectionProfileSource> toSourceMap(List<CollectionProfileSource> profileSources) {
+        Map<String, CollectionProfileSource> sourceMap = new LinkedHashMap<>();
+        for (CollectionProfileSource source : profileSources) {
+            sourceMap.put(source.getSourceKey().toLowerCase(Locale.ROOT), source);
+        }
+        return sourceMap;
+    }
+
+    private Map<String, UploadedObjectRef> toUploadedMap(List<FinalizeSessionImportUploadedFile> uploadedFiles) {
+        Map<String, UploadedObjectRef> uploadedByPath = new LinkedHashMap<>();
+        for (FinalizeSessionImportUploadedFile file : uploadedFiles) {
+            String relativePath = normalizeEntryPath(file.relativePath());
+            uploadedByPath.put(relativePath, new UploadedObjectRef(
+                    firstNonBlank(file.originalFilename(), fileName(relativePath)),
+                    relativePath,
+                    file.objectKey(),
+                    firstNonBlank(file.contentType(), detectContentType(relativePath)),
+                    firstNonNull(file.fileSize(), 0L),
+                    file.sha256()
+            ));
+        }
+        return uploadedByPath;
+    }
+
+    private void validateDirectoryManifest(
+            CollectionProfile profile,
+            NormalizedSessionManifest manifest,
+            List<CollectionProfileSource> profileSources,
+            Map<String, UploadedObjectRef> uploadedByPath) {
+        PackageRuleResolver packageRule = profileRuleRegistry.getPackageRule(profile.getPackageRuleCode());
+        packageRule.validate(profile, manifest, new ArrayList<>(uploadedByPath.keySet()));
+
+        Set<String> allowedSourceKeys = profileSources.stream()
+                .map(CollectionProfileSource::getSourceKey)
+                .map(value -> value.toLowerCase(Locale.ROOT))
+                .collect(java.util.stream.Collectors.toSet());
+
+        JsonNode sourcesNode = manifest.sources();
+        Iterator<String> fieldNames = sourcesNode.fieldNames();
+        while (fieldNames.hasNext()) {
+            String sourceKey = fieldNames.next();
+            if (!allowedSourceKeys.contains(sourceKey.toLowerCase(Locale.ROOT))) {
+                throw new BizException("Manifest source key is not defined in profile: " + sourceKey);
+            }
+            String path = normalizeEntryPath(requiredSourcePath(sourceKey, sourcesNode.get(sourceKey)));
+            if (!uploadedByPath.containsKey(path)) {
+                throw new BizException("Manifest source path does not exist in uploaded files: " + path);
+            }
+        }
+
+        for (CollectionProfileSource profileSource : profileSources) {
+            if (profileSource.getRequiredFlag() != null && profileSource.getRequiredFlag() == 1
+                    && !sourcesNode.has(profileSource.getSourceKey())) {
+                throw new BizException("Manifest missing required source: " + profileSource.getSourceKey());
+            }
+        }
+
+        for (String artifactPath : collectArtifactPaths(manifest.artifacts())) {
+            if (!uploadedByPath.containsKey(artifactPath)) {
+                throw new BizException("Manifest artifact path does not exist in uploaded files: " + artifactPath);
+            }
+        }
+    }
+
+    private String requiredSourcePath(String sourceKey, JsonNode sourceNode) {
+        String path = textValue(sourceNode, "path");
+        if (isBlank(path)) {
+            throw new BizException("Manifest source missing path: " + sourceKey);
+        }
+        return path;
+    }
+
+    private List<String> collectArtifactPaths(JsonNode artifactsNode) {
+        List<String> artifactPaths = new ArrayList<>();
+        if (artifactsNode == null || artifactsNode.isNull()) {
+            return artifactPaths;
+        }
+        if (artifactsNode.isTextual()) {
+            artifactPaths.add(normalizeEntryPath(artifactsNode.asText()));
+            return artifactPaths;
+        }
+        if (artifactsNode.isArray()) {
+            for (JsonNode node : artifactsNode) {
+                artifactPaths.addAll(collectArtifactPaths(node));
+            }
+            return artifactPaths;
+        }
+        if (artifactsNode.isObject()) {
+            String directPath = textValue(artifactsNode, "path");
+            if (!isBlank(directPath)) {
+                artifactPaths.add(normalizeEntryPath(directPath));
+                return artifactPaths;
+            }
+            Iterator<String> fieldNames = artifactsNode.fieldNames();
+            while (fieldNames.hasNext()) {
+                artifactPaths.addAll(collectArtifactPaths(artifactsNode.get(fieldNames.next())));
+            }
+        }
+        return artifactPaths;
+    }
+
+    private DataFile createImportedDataFile(
+            Long taskId,
+            Long sessionId,
+            String fileRole,
+            String sourceKey,
+            UploadedObjectRef file,
+            AssetType assetType) {
+        verifyImportedObject(file);
+        DataFile dataFile = new DataFile();
+        dataFile.setTaskId(taskId);
+        dataFile.setSessionId(sessionId);
+        dataFile.setFileRole(fileRole);
+        dataFile.setSourceKey(sourceKey);
+        dataFile.setOriginalFilename(file.originalFilename());
+        dataFile.setRelativePath(file.relativePath());
+        dataFile.setFileExt(FileNameUtils.getExtension(file.originalFilename()));
+        dataFile.setContentType(file.contentType());
+        dataFile.setFileSize(file.fileSize());
+        dataFile.setSha256(file.sha256());
+        dataFile.setAssetType(assetType.name());
+        dataFile.setStorageProvider(storageRouter.defaultService().provider().name());
+        dataFile.setBucketName(storageProperties.getOss().getBucket());
+        dataFile.setObjectKey(file.objectKey());
+        dataFile.setStorageUrl(buildOssStorageUrl(storageProperties.getOss().getBucket(), file.objectKey()));
+        dataFile.setUploadStatus(FileUploadStatus.SUCCESS.name());
+        dataFile.setCreatedAt(LocalDateTime.now());
+        dataFileMapper.insert(dataFile);
+        return dataFile;
+    }
+
+    private void verifyImportedObject(UploadedObjectRef file) {
+        ObjectStat objectStat = storageRouter.defaultService().headObject(storageProperties.getOss().getBucket(), file.objectKey());
+        if (objectStat.size() != file.fileSize()) {
+            throw new BizException("Uploaded object size mismatch for " + file.relativePath());
+        }
+    }
+
+    private String buildOssStorageUrl(String bucketName, String objectKey) {
+        return "oss://" + bucketName + "/" + objectKey;
+    }
+
+    private String buildImportObjectKey(Long taskId, String importKey, String relativePath) {
+        return "imports/" + taskId + "/" + importKey + "/" + relativePath;
+    }
+
+    private String buildImportRoleSessionName(Long taskId, String importKey, String relativePath) {
+        String value = "mmdp-import-" + taskId + "-" + importKey + "-" + fileName(relativePath);
+        return value.length() <= 64 ? value : value.substring(0, 64);
+    }
+
+    private FinalizeSessionImportResponse toFinalizeResponse(
+            SessionImportRecord importRecord,
+            AcquisitionTask task,
+            CollectionSession session,
+            NormalizedSessionManifest manifest,
+            boolean existing,
+            int createdFileCount,
+            int createdAssetCount) {
+        return new FinalizeSessionImportResponse(
+                importRecord == null ? null : importRecord.getId(),
+                task.getId(),
+                session == null ? null : session.getId(),
+                session == null ? null : session.getSessionCode(),
+                manifest.localSessionId(),
+                manifest.profileCode(),
+                manifest.subjectCode(),
+                importRecord == null ? SessionImportStatus.IMPORTED.name() : importRecord.getStatus(),
+                existing,
+                createdFileCount,
+                createdAssetCount,
+                manifest.sources() == null ? 0 : manifest.sources().size()
+        );
+    }
+
     private JsonNode parseManifest(MultipartFile file) {
         try {
             return objectMapper.readTree(file.getBytes());
@@ -676,5 +1057,15 @@ public class SessionImportServiceImpl implements SessionImportService {
     }
 
     private record ImportedBinary(String originalFilename, String contentType, byte[] bytes) {
+    }
+
+    private record UploadedObjectRef(
+            String originalFilename,
+            String relativePath,
+            String objectKey,
+            String contentType,
+            Long fileSize,
+            String sha256
+    ) {
     }
 }

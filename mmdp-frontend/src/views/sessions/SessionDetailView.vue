@@ -3,7 +3,7 @@
     <PageHeader
       eyebrow="采集 Workspace"
       :title="detail.session.sessionCode || detail.session.sessionId"
-      description="围绕采集阶段、资产组、质检、导出和下一步动作组织的工作台。"
+      description="采集页聚焦当前采集的数据资产、质检和导出状态。"
       surface="plain"
     >
       <template #actions>
@@ -18,23 +18,21 @@
 
     <WorkspaceOverviewBar :items="overviewItems" :secondary="overviewSecondary" />
 
-    <PageCard eyebrow="健康摘要" title="当前采集是否健康" description="快速查看当前采集的质检、异常、待处理和导出就绪情况。">
-      <WorkspaceHealthSummary :items="healthItems" />
-    </PageCard>
+    <div class="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.8fr)]">
+      <section class="workspace-section-secondary">
+        <div class="mb-2 text-[11px] font-medium tracking-[0.08em] text-[var(--color-text-tertiary)]">核心健康状态</div>
+        <WorkspaceHealthSummary :items="compactHealthItems" compact />
+      </section>
 
-    <PageCard eyebrow="阶段进度" title="采集当前处于什么阶段" description="沿着采集、资产组、文件、质检和导出的主线理解当前工作进度。">
-      <WorkflowTimeline :stages="sessionStages" />
-    </PageCard>
+      <section class="workspace-section-secondary">
+        <div class="mb-2 text-[11px] font-medium tracking-[0.08em] text-[var(--color-text-tertiary)]">进度状态</div>
+        <WorkflowTimeline :stages="sessionStages" compact />
+      </section>
+    </div>
 
-    <section class="space-y-3">
-      <div>
-        <div class="text-[11px] font-medium tracking-[0.08em] text-[var(--color-text-tertiary)]">规模概览</div>
-        <h2 class="mt-1 text-[17px] font-semibold text-[var(--color-text-primary)]">采集产出规模</h2>
-      </div>
-      <BusinessMetrics :items="metricItems" />
-    </section>
+    <BusinessMetrics :items="metricItems" />
 
-    <PageCard eyebrow="核心产出" title="Asset Groups" description="先看当前采集产出的资产组，再决定是否下钻到具体文件。">
+    <PageCard eyebrow="核心工作区" title="Asset Groups" description="这是采集页唯一核心区，先看资产组，再决定是否下钻文件。">
       <div v-if="detail.groups.length" class="workspace-group-grid">
         <article
           v-for="group in detail.groups"
@@ -54,11 +52,10 @@
                 <span>资产 <strong>{{ group.assetCount }}</strong></span>
                 <span>文件 <strong>{{ group.fileCount }}</strong></span>
                 <span>大小 <strong>{{ formatFileSize(group.totalSize) }}</strong></span>
+                <span>更新 <strong>{{ groupUpdatedAt(group) }}</strong></span>
               </div>
               <div class="app-summary-meta-inline">
                 <span>健康 <strong>{{ groupHealthCaption(group) }}</strong></span>
-                <span>·</span>
-                <span>最近更新 <strong>{{ groupUpdatedAt(group) }}</strong></span>
                 <span>·</span>
                 <span>下一步 <strong>{{ nextStepForGroup(group) }}</strong></span>
               </div>
@@ -125,95 +122,49 @@
       <div v-else class="workspace-muted-empty">当前采集下还没有可分组展示的资产。</div>
     </PageCard>
 
-    <PageCard eyebrow="文件" title="Files" description="文件默认不作为首屏主体，先选择资产组，再查看该组的文件与明细。">
-      <div v-if="activeGroup" class="space-y-3">
-        <div class="rounded-[14px] border border-[var(--color-border-soft)] bg-[var(--color-surface-muted)] px-4 py-3 text-sm text-[var(--color-text-secondary)]">
-          当前正在查看 <span class="font-semibold text-[var(--color-text-primary)]">{{ activeGroup.title }}</span> 下的文件，共 {{ activeGroup.assets.length }} 条。
+    <div class="grid gap-3 xl:grid-cols-2">
+      <section class="workspace-section-secondary">
+        <div class="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <div class="text-[11px] font-medium tracking-[0.08em] text-[var(--color-text-tertiary)]">QC Summary</div>
+            <div class="mt-1 text-sm font-semibold text-[var(--color-text-primary)]">质检摘要</div>
+          </div>
+          <BaseButton size="sm" variant="ghost" :to="`/qc?taskId=${detail.session.taskId}`">查看报告</BaseButton>
         </div>
-        <div class="workspace-file-stack">
-          <article
-            v-for="asset in activeGroup.assets"
-            :key="asset.id"
-            class="workspace-file-row"
-          >
-            <div class="flex min-w-0 items-start gap-3">
-              <div class="app-metric-icon mt-0.5" :class="fileToneClass(asset)">
-                <BaseIcon :name="fileIcon(asset)" size="sm" />
-              </div>
-              <div class="min-w-0">
-                <div class="truncate text-sm font-semibold text-[var(--color-text-primary)]">{{ asset.fileName || asset.assetName }}</div>
-                <div class="mt-1 text-xs text-[var(--color-text-tertiary)]">
-                  {{ asset.fileFormat || asset.assetType }} · {{ formatFileSize(asset.fileSize) }}
-                </div>
-              </div>
-            </div>
-            <div class="flex items-center gap-2">
-              <StatusBadge :status="asset.qcStatus" />
-              <BaseButton size="sm" variant="ghost" :to="`/data/${asset.id}?taskId=${detail.task?.id ?? detail.session.taskId}`">详情</BaseButton>
-            </div>
-          </article>
+        <WorkspaceHealthSummary :items="qcItems" compact />
+      </section>
+
+      <section class="workspace-section-secondary">
+        <div class="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <div class="text-[11px] font-medium tracking-[0.08em] text-[var(--color-text-tertiary)]">Export Summary</div>
+            <div class="mt-1 text-sm font-semibold text-[var(--color-text-primary)]">导出摘要</div>
+          </div>
+          <BaseButton size="sm" variant="ghost" :to="`/export?sessionId=${detail.session.sessionId}`">查看导出</BaseButton>
         </div>
+        <WorkspaceHealthSummary :items="exportItems" compact />
+      </section>
+    </div>
+
+    <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <section class="workspace-section-secondary">
+        <div class="mb-3 text-[11px] font-medium tracking-[0.08em] text-[var(--color-text-tertiary)]">下一步</div>
+        <NextActionsPanel :actions="nextActions" />
+      </section>
+
+      <div class="space-y-3">
+        <WorkspaceDisclosure title="Related Processing" :summary="processingSummary">
+          <RelatedProcessingPanel
+            :items="processingItems"
+            empty-text="当前采集尚未进入处理阶段。"
+          />
+        </WorkspaceDisclosure>
+
+        <WorkspaceDisclosure title="Metadata" :summary="metadataSummary">
+          <WorkspaceMetadataGrid :items="metadataItems" />
+        </WorkspaceDisclosure>
       </div>
-      <div v-else class="workspace-muted-empty">先在上方 Asset Groups 中选择一个资产组，再查看该组的文件列表。</div>
-    </PageCard>
-
-    <PageCard eyebrow="质检" title="QC" description="单独查看当前采集的质检状态、异常数量、最近报告和查看入口。">
-      <div class="space-y-4">
-        <WorkspaceHealthSummary :items="qcItems" />
-        <div v-if="detail.reports.length" class="space-y-2">
-          <article
-            v-for="report in detail.reports.slice(0, 3)"
-            :key="report.id"
-            class="workspace-secondary-row"
-          >
-            <div class="min-w-0">
-              <div class="text-sm font-semibold text-[var(--color-text-primary)]">报告 #{{ report.id }}</div>
-              <div class="mt-1 text-xs text-[var(--color-text-tertiary)]">{{ report.summary }}</div>
-            </div>
-            <div class="flex items-center gap-2">
-              <StatusBadge :status="report.qcStatus" />
-              <BaseButton size="sm" variant="ghost" :to="`/qc?taskId=${detail.session.taskId}`">查看报告</BaseButton>
-            </div>
-          </article>
-        </div>
-        <div v-else class="workspace-muted-empty">当前无可用 QC 结果，可在下一步动作中继续查看质检入口或等待新的检查结果。</div>
-      </div>
-    </PageCard>
-
-    <PageCard eyebrow="导出" title="Export" description="统一查看导出状态、可下载格式和导出入口，而不是把导出文件直接暴露成主体列表。">
-      <div class="space-y-4">
-        <WorkspaceHealthSummary :items="exportItems" />
-        <div v-if="downloadableAssets.length" class="space-y-2">
-          <article
-            v-for="asset in downloadableAssets.slice(0, 5)"
-            :key="asset.id"
-            class="workspace-secondary-row"
-          >
-            <div class="min-w-0">
-              <div class="text-sm font-semibold text-[var(--color-text-primary)]">{{ asset.assetName }}</div>
-              <div class="mt-1 text-xs text-[var(--color-text-tertiary)]">{{ asset.fileFormat || asset.assetType }} · {{ formatFileSize(asset.fileSize) }}</div>
-            </div>
-            <div class="flex items-center gap-2">
-              <StatusBadge :status="detail.session.exportStatus" />
-              <BaseButton size="sm" variant="ghost" :href="asset.rawAsset.storageUrl || undefined">下载</BaseButton>
-            </div>
-          </article>
-        </div>
-        <div v-else class="workspace-muted-empty">当前采集尚无可直接下载的导出文件。</div>
-      </div>
-    </PageCard>
-
-    <PageCard eyebrow="相关处理" title="Related Processing" description="查看该采集是否已经进入处理链路，以及最近发生了哪些处理作业。">
-      <RelatedProcessingPanel :items="processingItems" empty-text="当前采集尚未进入处理阶段。" />
-    </PageCard>
-
-    <PageCard eyebrow="下一步" title="Next Actions" description="根据当前采集的健康度、导出状态和可播放状态，给出最值得执行的下一步。">
-      <NextActionsPanel :actions="nextActions" />
-    </PageCard>
-
-    <PageCard eyebrow="元数据" title="Metadata" description="基础记录信息下沉到底部，避免与资产组、质检、导出等主工作区争夺注意力。" secondary>
-      <WorkspaceMetadataGrid :items="metadataItems" />
-    </PageCard>
+    </div>
   </div>
 </template>
 
@@ -231,6 +182,7 @@ import PageHeader from "@/components/PageHeader.vue";
 import RelatedProcessingPanel from "@/components/RelatedProcessingPanel.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 import WorkflowTimeline, { type WorkflowStageStatus } from "@/components/WorkflowTimeline.vue";
+import WorkspaceDisclosure from "@/components/WorkspaceDisclosure.vue";
 import WorkspaceHealthSummary from "@/components/WorkspaceHealthSummary.vue";
 import WorkspaceMetadataGrid from "@/components/WorkspaceMetadataGrid.vue";
 import WorkspaceOverviewBar from "@/components/WorkspaceOverviewBar.vue";
@@ -283,36 +235,60 @@ const pendingCount = computed(() => {
   return detail.value.assets.filter((asset) => PENDING_STATUSES.has(asset.qcStatus) || PENDING_STATUSES.has(asset.processingStatus)).length;
 });
 
-const healthItems = computed(() => [
-  {
-    label: "QC 状态",
-    value: formatStatusLabel(detail.value?.qcSummary.overallStatus),
-    caption: "基于当前采集的 Session 级质检摘要。",
-    icon: "clipboard-check",
-    tone: "qc" as const,
-  },
-  {
-    label: "异常数量",
-    value: abnormalCount.value,
-    caption: abnormalCount.value ? "存在需优先处理的异常或质检失败项。" : "当前未发现明显异常。",
-    icon: "shield-alert",
-    tone: "qc" as const,
-  },
-  {
-    label: "待处理项",
-    value: pendingCount.value,
-    caption: pendingCount.value ? "仍有资产或文件处于待处理状态。" : "当前待处理项较少。",
-    icon: "clock",
-    tone: "process" as const,
-  },
-  {
-    label: "可导出状态",
-    value: formatStatusLabel(detail.value?.session.exportStatus),
-    caption: downloadableAssets.value.length ? `已有 ${downloadableAssets.value.length} 个可下载导出结果。` : "当前尚无可直接下载的导出结果。",
-    icon: "download",
-    tone: "export" as const,
-  },
-]);
+const compactHealthItems = computed<
+  Array<{
+    label: string;
+    value: string | number;
+    caption: string;
+    icon: string;
+    tone: "qc" | "export" | "process";
+  }>
+>(() => {
+  const items: Array<{
+    label: string;
+    value: string | number;
+    caption: string;
+    icon: string;
+    tone: "qc" | "export" | "process";
+  }> = [
+    {
+      label: "QC 状态",
+      value: formatStatusLabel(detail.value?.qcSummary.overallStatus),
+      caption: "当前采集质检摘要",
+      icon: "clipboard-check",
+      tone: "qc" as const,
+    },
+    {
+      label: "可导出状态",
+      value: formatStatusLabel(detail.value?.session.exportStatus),
+      caption: downloadableAssets.value.length ? "已有导出结果" : "导出未就绪",
+      icon: "download",
+      tone: "export" as const,
+    },
+  ];
+
+  if (abnormalCount.value > 0) {
+    items.unshift({
+      label: "异常数量",
+      value: abnormalCount.value,
+      caption: "存在需优先处理的异常项",
+      icon: "shield-alert",
+      tone: "qc" as const,
+    });
+  }
+
+  if (pendingCount.value > 0) {
+    items.push({
+      label: "待处理项",
+      value: pendingCount.value,
+      caption: "仍有资产或文件待处理",
+      icon: "clock",
+      tone: "process" as const,
+    });
+  }
+
+  return items.slice(0, 4);
+});
 
 const sessionStages = computed<
   Array<{ label: string; caption: string; status: WorkflowStageStatus; tone?: "session" | "asset" | "upload" | "qc" | "export" }>
@@ -324,28 +300,28 @@ const sessionStages = computed<
   const hasRisk = abnormalCount.value > 0;
 
   return [
-    { label: "Session Registered", caption: "采集会话已登记", status: "done" as const, tone: "session" as const },
+    { label: "已登记", caption: "采集会话已建立", status: "done" as const, tone: "session" as const },
     {
-      label: "Assets Grouped",
-      caption: hasGroups ? `${detail.value?.groups.length ?? 0} 个资产组` : "等待形成资产组",
+      label: "资产组",
+      caption: hasGroups ? `${detail.value?.groups.length ?? 0} 个分组` : "等待分组",
       status: (hasGroups ? "done" : "current") as WorkflowStageStatus,
       tone: "asset" as const,
     },
     {
-      label: "Files Available",
-      caption: hasFiles ? `${detail.value?.session.fileCount ?? 0} 个文件已关联` : "等待文件登记",
+      label: "文件可用",
+      caption: hasFiles ? `${detail.value?.session.fileCount ?? 0} 个文件` : "等待文件",
       status: (hasFiles ? "done" : hasGroups ? "current" : "waiting") as WorkflowStageStatus,
       tone: "upload" as const,
     },
     {
-      label: "QC Reviewed",
-      caption: detail.value?.reports.length ? `${detail.value?.reports.length ?? 0} 条质检记录` : "等待质检结果",
+      label: "QC",
+      caption: detail.value?.reports.length ? `${detail.value?.reports.length ?? 0} 条结果` : "等待质检",
       status: (FAILURE_STATUSES.has(qcStatus) ? "risk" : detail.value?.reports.length ? "done" : "waiting") as WorkflowStageStatus,
       tone: "qc" as const,
     },
     {
-      label: "Export Ready",
-      caption: exportReady ? `${downloadableAssets.value.length} 个结果可导出` : "尚未形成导出结果",
+      label: "导出",
+      caption: exportReady ? `${downloadableAssets.value.length} 个结果可导出` : "尚未就绪",
       status: (exportReady ? "done" : hasRisk ? "risk" : "waiting") as WorkflowStageStatus,
       tone: "export" as const,
     },
@@ -361,7 +337,7 @@ const metricItems = computed<MetricItem[]>(() => [
 
 const qcItems = computed(() => [
   {
-    label: "QC 总状态",
+    label: "QC 状态",
     value: formatStatusLabel(detail.value?.qcSummary.overallStatus),
     caption: detail.value?.qcSummary.note || "当前暂无更多质检说明。",
     icon: "clipboard-check",
@@ -379,13 +355,6 @@ const qcItems = computed(() => [
     value: abnormalCount.value,
     caption: "汇总当前采集中的失败或告警结果。",
     icon: "shield-alert",
-    tone: "qc" as const,
-  },
-  {
-    label: "查看入口",
-    value: detail.value?.reports.length ? "可查看报告" : "暂无报告",
-    caption: "更多细节可进入质检工作台查看。",
-    icon: "search",
     tone: "qc" as const,
   },
 ]);
@@ -417,13 +386,6 @@ const exportItems = computed(() => [
     icon: "clock",
     tone: "export" as const,
   },
-  {
-    label: "导出入口",
-    value: downloadableAssets.value.length ? "可进入导出" : "暂不可用",
-    caption: "统一通过导出工作区查看下载入口。",
-    icon: "download",
-    tone: "export" as const,
-  },
 ]);
 
 const exportUpdatedAt = computed(() => {
@@ -445,6 +407,14 @@ const processingItems = computed(() =>
       to: "/processing",
     })),
 );
+
+const processingSummary = computed(() => {
+  if (processingItems.value.length) {
+    const latest = processingItems.value[0];
+    return `${processingItems.value.length} 条处理记录 · 最近 ${latest.status ? formatStatusLabel(latest.status) : "已更新"}`;
+  }
+  return "当前采集尚未进入处理阶段";
+});
 
 const nextActions = computed(() => {
   if (!detail.value) {
@@ -535,6 +505,10 @@ const metadataItems = computed(() => {
     { label: "创建人", value: detail.value?.session.operatorName || "-" },
   ];
   return [...base, ...extra.filter((item) => !["sessionId", "创建时间", "创建人"].includes(item.label))];
+});
+
+const metadataSummary = computed(() => {
+  return `Session ${detail.value?.session.sessionCode || detail.value?.session.sessionId || "-"} · 创建时间 ${formatDateTime(detail.value?.session.createdAt)}`;
 });
 
 function latestTime(primary?: string | null, fallback?: string | null) {

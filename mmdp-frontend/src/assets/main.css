@@ -5,6 +5,7 @@
   --color-brand-50: #ddf4ff;
   --color-brand-100: #b6e3ff;
   --color-brand-200: #80ccff;
+  --color-brand-300: #54aeff;
   --color-brand-500: #0969da;
   --color-brand-600: #0550ae;
   --color-brand-700: #033d8b;
@@ -213,6 +214,59 @@
   .app-link:hover {
     color: var(--color-brand-600);
     text-decoration: underline;
+  }
+
+  .app-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-border-soft);
+    padding: 0.28rem 0.65rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.2;
+  }
+
+  .app-segmented-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 2rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-border-default);
+    padding: 0.35rem 0.8rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1;
+    transition:
+      border-color 0.15s ease,
+      background-color 0.15s ease,
+      color 0.15s ease;
+  }
+
+  .app-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 2rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-border-default);
+    padding: 0.3rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1;
+    transition:
+      border-color 0.15s ease,
+      background-color 0.15s ease,
+      color 0.15s ease;
+  }
+
+  .app-inline-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
   }
 
   .app-list-section-title {
@@ -650,6 +704,12 @@
     grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   }
 
+  .workspace-health-grid-compact {
+    display: grid;
+    gap: 0.6rem;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+
   .workspace-health-item {
     border: 1px solid var(--color-border-soft);
     background: white;
@@ -658,10 +718,23 @@
     box-shadow: var(--shadow-card);
   }
 
+  .workspace-health-item-compact {
+    padding: 0.7rem 0.8rem;
+    border-radius: 12px;
+    box-shadow: none;
+    background: rgba(255, 255, 255, 0.96);
+  }
+
   .workspace-stage-timeline {
     display: grid;
     gap: 0.75rem;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+
+  .workspace-stage-timeline-compact {
+    display: grid;
+    gap: 0.55rem;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   }
 
   .workspace-stage-node {
@@ -674,6 +747,13 @@
     border-radius: 16px;
     padding: 0.95rem 1rem;
     box-shadow: var(--shadow-card);
+  }
+
+  .workspace-stage-node-compact {
+    border-radius: 12px;
+    padding: 0.7rem 0.8rem;
+    box-shadow: none;
+    background: rgba(255, 255, 255, 0.96);
   }
 
   .workspace-stage-marker {
@@ -789,6 +869,21 @@
     gap: 0.85rem;
   }
 
+  .workspace-section-secondary {
+    border: 1px solid var(--color-border-soft);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.96);
+    padding: 0.95rem 1rem;
+    box-shadow: var(--shadow-card);
+  }
+
+  .workspace-section-tertiary {
+    border: 1px solid var(--color-border-soft);
+    border-radius: 14px;
+    background: var(--color-surface-muted);
+    padding: 0.85rem 0.95rem;
+  }
+
   .workspace-group-row {
     position: relative;
     border: 1px solid var(--color-border-soft);
@@ -828,5 +923,27 @@
     color: var(--color-text-tertiary);
     font-size: 0.875rem;
     line-height: 1.6;
+  }
+
+  .workspace-disclosure-panel {
+    border: 1px solid var(--color-border-soft);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.96);
+    padding: 0.85rem 0.95rem;
+  }
+
+  .workspace-disclosure {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    text-align: left;
+  }
+
+  .workspace-disclosure-summary {
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--color-text-tertiary);
   }
 }
