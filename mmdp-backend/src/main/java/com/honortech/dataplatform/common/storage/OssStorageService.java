@@ -70,6 +70,16 @@ public class OssStorageService implements StorageService {
     }
 
     @Override
+    public void copyObject(String sourceBucketName, String sourceObjectKey, String targetBucketName, String targetObjectKey) {
+        try {
+            OSS ossClient = getClient();
+            ossClient.copyObject(sourceBucketName, sourceObjectKey, targetBucketName, targetObjectKey);
+        } catch (Exception exception) {
+            throw new BizException("Failed to copy file in OSS", exception);
+        }
+    }
+
+    @Override
     public long getObjectSize(String bucketName, String objectKey) {
         try {
             OSS ossClient = getClient();

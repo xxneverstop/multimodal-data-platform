@@ -1,16 +1,19 @@
 <template>
-  <article class="relative overflow-hidden rounded-[12px] border border-slate-200 bg-white px-4 py-3">
-    <div
-      class="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full"
-      :class="iconTone"
-      aria-hidden="true"
-    >
-      <BaseIcon :name="icon" />
-    </div>
-    <div class="pr-12">
-      <div class="text-[11px] font-medium tracking-[0.08em] text-slate-500">{{ label }}</div>
-      <div class="mt-2 text-[28px] font-semibold leading-none text-slate-900">{{ value }}</div>
-      <p v-if="description" class="mt-2 text-xs leading-5 text-slate-500">{{ description }}</p>
+  <article class="app-metric-card">
+    <div class="app-metric-accent" />
+    <div class="flex items-start justify-between">
+      <div class="min-w-0 flex-1">
+        <div class="metric-label-sm">{{ label }}</div>
+        <div class="metric-value-lg">{{ value }}</div>
+        <p v-if="description" class="metric-caption-xs">{{ description }}</p>
+      </div>
+      <div
+        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+        :class="iconTone"
+        aria-hidden="true"
+      >
+        <BaseIcon :name="icon" size="sm" />
+      </div>
     </div>
   </article>
 </template>
@@ -28,7 +31,7 @@ withDefaults(
   }>(),
   {
     description: "",
-    iconTone: "bg-slate-100 text-slate-500"
-  }
+    iconTone: "bg-blue-50 text-blue-600",
+  },
 );
 </script>

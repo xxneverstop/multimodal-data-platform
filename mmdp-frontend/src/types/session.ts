@@ -13,6 +13,8 @@ export interface SessionListItem {
   modality?: string | null;
   startedAt?: string | null;
   createdAt: string;
+  collectorName?: string | null;
+  uploadedAt?: string | null;
   uploadStatus: string;
   qcStatus: string;
   exportStatus: string;

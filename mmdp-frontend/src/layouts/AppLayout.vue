@@ -16,7 +16,9 @@
             @click="accountMenuOpen = !accountMenuOpen"
           >
             <BaseIcon name="user-circle" size="sm" />
-            <span class="hidden max-w-[120px] truncate font-medium sm:inline">平台管理员</span>
+            <span class="hidden max-w-[180px] truncate font-medium sm:inline">
+              {{ displayName }}
+            </span>
             <BaseIcon
               name="chevron-down"
               size="sm"
@@ -27,17 +29,21 @@
 
           <div
             v-if="accountMenuOpen"
-            class="absolute right-0 top-[calc(100%+8px)] w-[180px] rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-white p-1.5 shadow-[var(--shadow-dropdown)]"
+            class="absolute right-0 top-[calc(100%+8px)] w-[220px] rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-white p-1.5 shadow-[var(--shadow-dropdown)]"
           >
+            <div class="border-b border-[var(--color-border-soft)] px-3 py-2">
+              <div class="text-sm font-semibold text-[var(--color-text-primary)]">{{ displayName }}</div>
+              <div class="mt-1 text-xs text-[var(--color-text-tertiary)]">
+                {{ authStore.user.value?.username }} · {{ roleLabel }}
+              </div>
+            </div>
             <button
-              v-for="action in accountActions"
-              :key="action.label"
               type="button"
-              class="flex w-full items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-left text-sm text-[var(--color-text-secondary)] transition hover:bg-[var(--color-hover-subtle)] hover:text-[var(--color-text-primary)]"
-              @click="handleAccountAction(action.label)"
+              class="mt-1 flex w-full items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-left text-sm text-[var(--color-text-secondary)] transition hover:bg-[var(--color-hover-subtle)] hover:text-[var(--color-text-primary)]"
+              @click="handleLogout"
             >
-              <BaseIcon :name="action.icon" size="sm" />
-              <span>{{ action.label }}</span>
+              <BaseIcon name="log-out" size="sm" />
+              <span>退出登录</span>
             </button>
           </div>
         </div>
@@ -56,7 +62,13 @@
             <BaseIcon name="home" />
           </RouterLink>
           <SideNavGroup label="功能" icon="grid" :active="isFunctionRoute" @toggle="setSection('function')" />
-          <SideNavGroup label="管理" icon="settings" :active="isManagementRoute" @toggle="setSection('management')" />
+          <SideNavGroup
+            v-if="authStore.isAdmin.value"
+            label="管理"
+            icon="settings"
+            :active="isManagementRoute"
+            @toggle="setSection('management')"
+          />
         </div>
       </aside>
 
@@ -73,8 +85,8 @@
               class="relative flex items-center gap-2 rounded-[var(--radius-md)] border border-transparent px-3 py-2 text-sm transition"
               :class="
                 route.path === item.to
-                  ? ['app-nav-module-active before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[2px] before:rounded-r', moduleToneClass(item.to)]
-                  : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-subtle)] hover:text-[var(--color-text-primary)]'
+                  ? ['app-nav-module-active before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[2.5px] before:rounded-r', moduleToneClass(item.to)]
+                  : 'text-[var(--color-text-tertiary)] hover:bg-[var(--color-hover-subtle)] hover:text-[var(--color-text-primary)] hover:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
               "
             >
               <BaseIcon v-if="item.icon" :name="item.icon" size="sm" class="shrink-0" />
@@ -120,9 +132,12 @@ import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import BaseIcon from "@/components/BaseIcon.vue";
 import MmdpLogo from "@/components/MmdpLogo.vue";
 import SideNavGroup from "@/components/SideNavGroup.vue";
+import { useAuthStore } from "@/stores/auth";
+import { getRoleLabel } from "@/types/user";
 
 const route = useRoute();
 const router = useRouter();
+const authStore = useAuthStore();
 
 type NavItem = {
   label: string;
@@ -148,22 +163,35 @@ const managementItems: NavItem[] = [
   { label: "字典", to: "/management/dictionaries", icon: "book" },
 ];
 
-const mobileItems: NavItem[] = [{ label: "首页", to: "/home" }, ...functionItems];
+const mobileItems = computed<NavItem[]>(() => {
+  const items: NavItem[] = [{ label: "首页", to: "/home" }, ...functionItems];
+  if (authStore.isAdmin.value) {
+    items.push({ label: "用户", to: "/management/users", icon: "users" });
+  }
+  return items;
+});
 
 const isHomeRoute = computed(() => route.path.startsWith("/home"));
 const isManagementRoute = computed(() => route.path.startsWith("/management"));
 const isFunctionRoute = computed(() => !isHomeRoute.value && !isManagementRoute.value);
 
-const showSecondarySidebar = computed(() => !isHomeRoute.value);
+const showSecondarySidebar = computed(() => {
+  if (isHomeRoute.value) {
+    return false;
+  }
+  if (isManagementRoute.value && !authStore.isAdmin.value) {
+    return false;
+  }
+  return true;
+});
+
 const secondaryItems = computed(() => (isManagementRoute.value ? managementItems : functionItems));
+
+const displayName = computed(() => authStore.user.value?.displayName || authStore.user.value?.username || "未登录");
+const roleLabel = computed(() => getRoleLabel(authStore.user.value?.roleCode || "VIEWER"));
 
 const accountMenuRef = ref<HTMLElement | null>(null);
 const accountMenuOpen = ref(false);
-const accountActions = [
-  { label: "账号设置", icon: "settings" },
-  { label: "个人信息", icon: "user-circle" },
-  { label: "退出登录", icon: "users" },
-];
 
 function setSection(target: "function" | "management") {
   if (target === "function") {
@@ -173,13 +201,19 @@ function setSection(target: "function" | "management") {
     return;
   }
 
+  if (!authStore.isAdmin.value) {
+    return;
+  }
+
   if (!isManagementRoute.value) {
     router.push("/management/users");
   }
 }
 
-function handleAccountAction(_label: string) {
+async function handleLogout() {
   accountMenuOpen.value = false;
+  await authStore.logout();
+  router.replace("/login");
 }
 
 function moduleToneClass(path: string) {

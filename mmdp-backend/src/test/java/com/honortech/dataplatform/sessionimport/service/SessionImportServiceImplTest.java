@@ -57,6 +57,7 @@ import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -137,6 +138,7 @@ class SessionImportServiceImplTest {
         }).when(sessionMapper).insert(any(CollectionSession.class));
 
         when(storageRouter.defaultService()).thenReturn(storageService);
+        when(storageService.provider()).thenReturn(StorageProvider.OSS);
         storageProperties.getOss().setBucket("mmdp-bucket");
         storageProperties.getOss().setRegion("cn-hangzhou");
         storageProperties.getOss().setEndpoint("oss-cn-hangzhou.aliyuncs.com");
@@ -152,6 +154,7 @@ class SessionImportServiceImplTest {
         when(storageService.assumeUploadCredentials(any(), any(), any())).thenReturn(
                 new TemporaryCredentials("ak", "sk", "token", "2026-06-05T12:00:00Z")
         );
+        Mockito.doNothing().when(storageService).copyObject(any(), any(), any(), any());
         when(storageService.headObject(any(), any())).thenAnswer(invocation ->
                 new ObjectStat(resolveSizeByObjectKey(invocation.getArgument(1, String.class)), "etag")
         );
@@ -438,9 +441,221 @@ class SessionImportServiceImplTest {
         )));
     }
 
+    @Test
+    void shouldRejectDirectoryImportWhenSourcePathIsOutsideItsSourceDirectory() {
+        AcquisitionTask task = new AcquisitionTask();
+        task.setId(23L);
+        task.setTaskCode("TASK-023");
+        task.setSubjectCode("S-001");
+        task.setProfileId(defaultProfile.getId());
+        task.setCollectDate(LocalDate.of(2026, 6, 5));
+        when(acquisitionTaskService.getTask(23L)).thenReturn(task);
+
+        BizException exception = assertThrows(BizException.class, () -> service.finalizeImport(new FinalizeSessionImportRequest(
+                23L,
+                "imp-003",
+                "imp-003",
+                objectMapper.valueToTree(Map.of(
+                        "localRefs", Map.of("localSessionId", "LS-dir-003"),
+                        "task", Map.of("name", "Walk Task", "profileCode", "BINOCULAR_HMD_IMU_V1"),
+                        "subject", Map.of("code", "S-001", "name", "Subject A"),
+                        "action", Map.of("name", "Walk"),
+                        "session", Map.of("startedAt", "2026-06-05T10:20:30", "timestampPolicy", "device"),
+                        "sources", Map.of(
+                                "imu", Map.of("path", "sources/cam01/data_imu.jsonl"),
+                                "cam01", Map.of("path", "sources/cam01/video.mp4")
+                        )
+                )),
+                List.of(
+                        new FinalizeSessionImportUploadedFile("manifest.json", "manifest.json", "imports/23/imp-003/manifest.json", "application/json", 512L, null),
+                        new FinalizeSessionImportUploadedFile("data_imu.jsonl", "sources/cam01/data_imu.jsonl", "imports/23/imp-003/sources/cam01/data_imu.jsonl", "application/json", 128L, null),
+                        new FinalizeSessionImportUploadedFile("video.mp4", "sources/cam01/video.mp4", "imports/23/imp-003/sources/cam01/video.mp4", "video/mp4", 2048L, null)
+                )
+        )));
+
+        assertEquals("Manifest source path must be under sources/imu/: sources/cam01/data_imu.jsonl", exception.getMessage());
+    }
+
+    @Test
+    void shouldRejectDirectoryImportWhenArtifactPathIsOutsideArtifactsDirectory() {
+        AcquisitionTask task = new AcquisitionTask();
+        task.setId(24L);
+        task.setTaskCode("TASK-024");
+        task.setSubjectCode("S-001");
+        task.setProfileId(defaultProfile.getId());
+        task.setCollectDate(LocalDate.of(2026, 6, 5));
+        when(acquisitionTaskService.getTask(24L)).thenReturn(task);
+
+        BizException exception = assertThrows(BizException.class, () -> service.finalizeImport(new FinalizeSessionImportRequest(
+                24L,
+                "imp-004",
+                "imp-004",
+                objectMapper.valueToTree(Map.of(
+                        "localRefs", Map.of("localSessionId", "LS-dir-004"),
+                        "task", Map.of("name", "Walk Task", "profileCode", "BINOCULAR_HMD_IMU_V1"),
+                        "subject", Map.of("code", "S-001", "name", "Subject A"),
+                        "action", Map.of("name", "Walk"),
+                        "session", Map.of("startedAt", "2026-06-05T10:20:30", "timestampPolicy", "device"),
+                        "sources", Map.of(
+                                "imu", Map.of("path", "sources/imu/data_imu.jsonl"),
+                                "cam01", Map.of("path", "sources/cam01/video.mp4")
+                        ),
+                        "artifacts", List.of(Map.of("path", "sources/imu/readme.md"))
+                )),
+                List.of(
+                        new FinalizeSessionImportUploadedFile("manifest.json", "manifest.json", "imports/24/imp-004/manifest.json", "application/json", 512L, null),
+                        new FinalizeSessionImportUploadedFile("data_imu.jsonl", "sources/imu/data_imu.jsonl", "imports/24/imp-004/sources/imu/data_imu.jsonl", "application/json", 128L, null),
+                        new FinalizeSessionImportUploadedFile("video.mp4", "sources/cam01/video.mp4", "imports/24/imp-004/sources/cam01/video.mp4", "video/mp4", 2048L, null),
+                        new FinalizeSessionImportUploadedFile("readme.md", "sources/imu/readme.md", "imports/24/imp-004/sources/imu/readme.md", "text/markdown", 64L, null)
+                )
+        )));
+
+        assertEquals("Manifest artifact path must be under artifacts/: sources/imu/readme.md", exception.getMessage());
+    }
+
+    @Test
+    void shouldFinalizeZedImuDirectoryImportWithTwoSourcesAndArtifacts() {
+        CollectionProfile zedProfile = new CollectionProfile();
+        zedProfile.setId(2L);
+        zedProfile.setProfileCode("ZED_STEREO_IMU_V1");
+        zedProfile.setProfileName("ZED Stereo + IMU Raw Import");
+        zedProfile.setModalityGroupCode("ZED_IMU_RAW");
+        zedProfile.setDeviceGroupCode("ZED_IMU");
+        zedProfile.setPackageRuleCode("SESSION_ZIP_V1");
+        zedProfile.setParserRuleCode("SESSION_JSONL_VIDEO_IMU_V1");
+        zedProfile.setArchiveRuleCode("SESSION_ARCHIVE_V1");
+        zedProfile.setPlaybackRuleCode("MULTI_VIDEO_IMU_V1");
+
+        when(collectionProfileService.getRequiredByCode("ZED_STEREO_IMU_V1")).thenReturn(zedProfile);
+        when(collectionProfileService.getRequiredById(2L)).thenReturn(zedProfile);
+        when(collectionProfileService.listSourcesByProfileId(2L)).thenReturn(List.of(
+                sourceForProfile(2L, "zed", "%zed%", "OTHER", "zed_mcap"),
+                sourceForProfile(2L, "imu", "%position%", "OTHER", "pose_csv")
+        ));
+
+        AcquisitionTask task = new AcquisitionTask();
+        task.setId(25L);
+        task.setTaskCode("TASK-025");
+        task.setSubjectCode("S-001");
+        task.setProfileId(2L);
+        task.setCollectDate(LocalDate.of(2026, 6, 2));
+        when(acquisitionTaskService.getTask(25L)).thenReturn(task);
+
+        FinalizeSessionImportResponse response = service.finalizeImport(new FinalizeSessionImportRequest(
+                25L,
+                "imp-zed-001",
+                "imp-zed-001",
+                objectMapper.valueToTree(Map.of(
+                        "localRefs", Map.of("localTaskId", "ZED-IMU-TASK-001", "localSessionId", "zed-imu-1"),
+                        "task", Map.of("name", "ZED+IMU 原始采集导入", "profileCode", "ZED_STEREO_IMU_V1"),
+                        "subject", Map.of("code", "S-001", "name", "Subject A"),
+                        "action", Map.of("code", "zed_imu_capture", "name", "ZED+IMU Capture"),
+                        "session", Map.of("startedAt", "2026-06-02T10:36:00", "timestampPolicy", "device"),
+                        "sources", Map.of(
+                                "zed", Map.of("type", "zed_mcap", "path", "sources/zed/zed.svo2"),
+                                "imu", Map.of("type", "pose_csv", "path", "sources/imu/position.csv")
+                        ),
+                        "artifacts", List.of(
+                                Map.of("path", "artifacts/zed/depth.npz", "kind", "DEPTH_RAW"),
+                                Map.of("path", "artifacts/zed/frame_timestamps.csv", "kind", "FRAME_TIMESTAMPS_CSV"),
+                                Map.of("path", "artifacts/zed/frame_timestamps.npz", "kind", "FRAME_TIMESTAMPS_CACHE"),
+                                Map.of("path", "artifacts/imu/position.npz", "kind", "POSE_CACHE")
+                        )
+                )),
+                List.of(
+                        new FinalizeSessionImportUploadedFile("manifest.json", "manifest.json", "imports/25/imp-zed-001/manifest.json", "application/json", 512L, null),
+                        new FinalizeSessionImportUploadedFile("zed.svo2", "sources/zed/zed.svo2", "imports/25/imp-zed-001/sources/zed/zed.svo2", "application/octet-stream", 27501328L, null),
+                        new FinalizeSessionImportUploadedFile("position.csv", "sources/imu/position.csv", "imports/25/imp-zed-001/sources/imu/position.csv", "text/csv", 63687L, null),
+                        new FinalizeSessionImportUploadedFile("depth.npz", "artifacts/zed/depth.npz", "imports/25/imp-zed-001/artifacts/zed/depth.npz", "application/octet-stream", 13819049L, null),
+                        new FinalizeSessionImportUploadedFile("frame_timestamps.csv", "artifacts/zed/frame_timestamps.csv", "imports/25/imp-zed-001/artifacts/zed/frame_timestamps.csv", "text/csv", 20026L, null),
+                        new FinalizeSessionImportUploadedFile("frame_timestamps.npz", "artifacts/zed/frame_timestamps.npz", "imports/25/imp-zed-001/artifacts/zed/frame_timestamps.npz", "application/octet-stream", 4875L, null),
+                        new FinalizeSessionImportUploadedFile("position.npz", "artifacts/imu/position.npz", "imports/25/imp-zed-001/artifacts/imu/position.npz", "application/octet-stream", 6053L, null)
+                )
+        ));
+
+        assertEquals(false, response.existing());
+        assertEquals(SessionImportStatus.IMPORTED.name(), response.status());
+        assertEquals(7, response.createdFileCount());
+        assertEquals(2, response.createdAssetCount());
+        assertEquals("ZED_STEREO_IMU_V1", response.profileCode());
+        verify(sessionMapper).insert(any(CollectionSession.class));
+        verify(storageService, Mockito.times(7)).copyObject(eq("mmdp-bucket"), any(), eq("mmdp-bucket"), any());
+        verify(dataFileMapper, Mockito.times(7)).insert(any(DataFile.class));
+        verify(dataAssetService, Mockito.times(2)).createAcquisitionAsset(eq(25L), any(), any(), any(), any(AssetType.class));
+        ArgumentCaptor<DataFile> fileCaptor = ArgumentCaptor.forClass(DataFile.class);
+        verify(dataFileMapper, Mockito.times(7)).insert(fileCaptor.capture());
+        assertTrue(fileCaptor.getAllValues().stream().allMatch(file ->
+                file.getObjectKey().startsWith("tasks/TASK-025/sessions/SESS-001/imports/")));
+    }
+
+    @Test
+    void shouldRejectZedImuDirectoryImportWhenRequiredSourceMissing() {
+        CollectionProfile zedProfile = new CollectionProfile();
+        zedProfile.setId(2L);
+        zedProfile.setProfileCode("ZED_STEREO_IMU_V1");
+        zedProfile.setProfileName("ZED Stereo + IMU Raw Import");
+        zedProfile.setModalityGroupCode("ZED_IMU_RAW");
+        zedProfile.setDeviceGroupCode("ZED_IMU");
+        zedProfile.setPackageRuleCode("SESSION_ZIP_V1");
+        zedProfile.setParserRuleCode("SESSION_JSONL_VIDEO_IMU_V1");
+        zedProfile.setArchiveRuleCode("SESSION_ARCHIVE_V1");
+        zedProfile.setPlaybackRuleCode("MULTI_VIDEO_IMU_V1");
+
+        when(collectionProfileService.getRequiredByCode("ZED_STEREO_IMU_V1")).thenReturn(zedProfile);
+        when(collectionProfileService.getRequiredById(2L)).thenReturn(zedProfile);
+        when(collectionProfileService.listSourcesByProfileId(2L)).thenReturn(List.of(
+                sourceForProfile(2L, "zed", "%zed%", "OTHER", "zed_mcap"),
+                sourceForProfile(2L, "imu", "%position%", "OTHER", "pose_csv")
+        ));
+
+        AcquisitionTask task = new AcquisitionTask();
+        task.setId(26L);
+        task.setTaskCode("TASK-026");
+        task.setSubjectCode("S-001");
+        task.setProfileId(2L);
+        task.setCollectDate(LocalDate.of(2026, 6, 2));
+        when(acquisitionTaskService.getTask(26L)).thenReturn(task);
+
+        BizException exception = assertThrows(BizException.class, () -> service.finalizeImport(new FinalizeSessionImportRequest(
+                26L,
+                "imp-zed-002",
+                "imp-zed-002",
+                objectMapper.valueToTree(Map.of(
+                        "localRefs", Map.of("localSessionId", "zed-imu-2"),
+                        "task", Map.of("name", "ZED+IMU 原始采集导入", "profileCode", "ZED_STEREO_IMU_V1"),
+                        "subject", Map.of("code", "S-001", "name", "Subject A"),
+                        "action", Map.of("code", "zed_imu_capture", "name", "ZED+IMU Capture"),
+                        "session", Map.of("startedAt", "2026-06-02T10:36:00", "timestampPolicy", "device"),
+                        "sources", Map.of(
+                                "zed", Map.of("type", "zed_mcap", "path", "sources/zed/zed.svo2")
+                        )
+                )),
+                List.of(
+                        new FinalizeSessionImportUploadedFile("manifest.json", "manifest.json", "imports/26/imp-zed-002/manifest.json", "application/json", 512L, null),
+                        new FinalizeSessionImportUploadedFile("zed.svo2", "sources/zed/zed.svo2", "imports/26/imp-zed-002/sources/zed/zed.svo2", "application/octet-stream", 27501328L, null)
+                )
+        )));
+
+        assertEquals("Manifest missing required source: imu", exception.getMessage());
+    }
+
     private CollectionProfileSource source(String sourceKey, String filePattern, String assetType, String sourceType) {
         CollectionProfileSource source = new CollectionProfileSource();
         source.setProfileId(defaultProfile.getId());
+        source.setSourceKey(sourceKey);
+        source.setSourceName(sourceKey);
+        source.setSourceType(sourceType);
+        source.setFilePattern(filePattern);
+        source.setParsedAssetType(assetType);
+        source.setRequiredFlag(1);
+        source.setEnabled(1);
+        source.setSortOrder(1);
+        return source;
+    }
+
+    private CollectionProfileSource sourceForProfile(Long profileId, String sourceKey, String filePattern, String assetType, String sourceType) {
+        CollectionProfileSource source = new CollectionProfileSource();
+        source.setProfileId(profileId);
         source.setSourceKey(sourceKey);
         source.setSourceName(sourceKey);
         source.setSourceType(sourceType);
@@ -478,6 +693,24 @@ class SessionImportServiceImplTest {
         }
         if (objectKey.endsWith("readme.md")) {
             return 64L;
+        }
+        if (objectKey.endsWith("zed.svo2")) {
+            return 27501328L;
+        }
+        if (objectKey.endsWith("position.csv")) {
+            return 63687L;
+        }
+        if (objectKey.endsWith("depth.npz")) {
+            return 13819049L;
+        }
+        if (objectKey.endsWith("frame_timestamps.csv")) {
+            return 20026L;
+        }
+        if (objectKey.endsWith("frame_timestamps.npz")) {
+            return 4875L;
+        }
+        if (objectKey.endsWith("position.npz")) {
+            return 6053L;
         }
         return 1L;
     }

@@ -16,6 +16,8 @@ public class SessionListItemResponse {
     private String modality;
     private LocalDateTime startedAt;
     private LocalDateTime createdAt;
+    private String collectorName;
+    private LocalDateTime uploadedAt;
     private String uploadStatus;
     private String qcStatus;
     private String exportStatus;
@@ -118,6 +120,22 @@ public class SessionListItemResponse {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getCollectorName() {
+        return collectorName;
+    }
+
+    public void setCollectorName(String collectorName) {
+        this.collectorName = collectorName;
+    }
+
+    public LocalDateTime getUploadedAt() {
+        return uploadedAt;
+    }
+
+    public void setUploadedAt(LocalDateTime uploadedAt) {
+        this.uploadedAt = uploadedAt;
     }
 
     public String getUploadStatus() {

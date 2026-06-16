@@ -13,6 +13,9 @@ export interface AvailablePipelineResponse {
 export interface ProcessingJobResponse {
   id: number;
   taskId: number;
+  taskCode?: string | null;
+  sessionId?: string | null;
+  sessionCode?: string | null;
   pipelineId: string;
   executorType: string;
   status: string;
@@ -25,6 +28,8 @@ export interface ProcessingJobResponse {
   toolVersion?: string | null;
   logPath?: string | null;
   remark?: string | null;
+  duration?: string | null;
+  durationMs?: number | null;
   createdAt: string;
   updatedAt: string;
 }

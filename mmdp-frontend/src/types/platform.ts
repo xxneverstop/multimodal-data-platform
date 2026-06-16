@@ -8,6 +8,7 @@ export interface SessionRecord {
   sessionId: string;
   sessionCode?: string | null;
   taskId: number;
+  taskCode?: string | null;
   taskName: string;
   sessionName: string;
   subjectCode: string;
@@ -17,6 +18,7 @@ export interface SessionRecord {
   deviceSummary: string;
   modality: string;
   operatorName: string;
+  collectorName: string;
   taskStatus: string;
   dataStatus: string;
   processingStatus: string;
@@ -27,6 +29,7 @@ export interface SessionRecord {
   fileCount: number;
   totalSize: number;
   createdAt: string;
+  uploadedAt?: string | null;
   startedAt?: string | null;
   endedAt?: string | null;
   durationMs?: number | null;

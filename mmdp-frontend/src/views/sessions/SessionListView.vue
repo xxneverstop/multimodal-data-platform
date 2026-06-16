@@ -1,154 +1,112 @@
 <template>
-  <div class="space-y-5">
-    <PageHeader
-      surface="plain"
-      eyebrow="功能 / 采集"
-      title="采集"
-      description="查看采集、资产规模与状态，并继续播放、导出或进入详情。"
-    />
-
-    <BusinessMetrics :items="metricItems" />
-
-    <section class="app-list-panel">
-      <div class="app-list-panel-section app-list-panel-section-muted">
-        <SearchActionBar
-          v-model="listQuery"
-          :core-fields="coreFilterFields"
-          :advanced-fields="advancedFilterFields"
-          :advanced-open="advancedOpen"
-          :advanced-active="advancedActive"
-          search-tone="session"
-          @update:advanced-open="advancedOpen = $event"
-          @search="applyQuery"
-          @reset="resetQuery"
-        >
-          <template #advanced>
-            <SortToolbar
-              compact
-              :sort-field="sortState.field"
-              :sort-order="sortState.order"
-              :page-size="pageState.pageSize"
-              :sort-options="sortOptions"
-              @update:sort-field="updateSortField"
-              @update:sort-order="updateSortOrder"
-              @update:page-size="updatePageSize"
-            />
-          </template>
-        </SearchActionBar>
+  <div class="light2-page">
+    <!-- header -->
+    <div class="light2-hdr">
+      <div>
+        <h1>采集会话</h1>
+        <p>按采集会话查看数据 · 质检 · 导出 · 回放状态</p>
       </div>
+    </div>
 
-      <div class="app-column-strip lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1.2fr)_minmax(240px,1fr)_minmax(190px,0.8fr)_auto]">
-        <div>采集</div>
-        <div>上下文</div>
-        <div>资产摘要</div>
-        <div class="text-right">状态</div>
-        <div class="text-right">操作</div>
+    <!-- metrics -->
+    <div class="light2-metrics">
+      <div v-for="m in metricItems" :key="m.label" class="light2-mcard">
+        <div class="light2-mstripe" :style="{ background: m.tone === 'session' ? '#0d9444' : m.tone === 'asset' ? '#7c3aed' : m.tone === 'export' ? '#0d8ea0' : '#c5222f' }" />
+        <div class="light2-mlabel">{{ m.label }}</div>
+        <div class="light2-mvalue">{{ m.value }}</div>
       </div>
+    </div>
 
-      <div v-if="loading" class="px-5 py-12 text-center text-sm text-[var(--color-text-secondary)]">
-        正在加载采集列表...
+    <!-- filters -->
+    <div class="light2-filters">
+      <input v-model="listQuery.sessionNumber" type="text" placeholder="搜索采集编号 / 任务 / 被试..." class="light2-input" @keyup.enter="applyQuery" />
+      <div class="light2-sel">
+        <select v-model="listQuery.qcStatus" @change="applyQuery">
+          <option value="">全部 QC</option>
+          <option v-for="o in qcOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+        </select>
       </div>
-
-      <div v-else-if="displayedList.length" class="app-summary-list">
-        <article v-for="session in displayedList" :key="session.sessionId" class="app-summary-row app-row-accent-session">
-          <div class="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1.2fr)_minmax(240px,1fr)_minmax(190px,0.8fr)_auto] lg:items-center">
-            <section class="min-w-0">
-              <div class="flex items-start gap-3">
-                <div class="app-metric-icon app-tone-session mt-0.5 h-8 w-8 shrink-0">
-                  <BaseIcon name="camera" size="sm" />
-                </div>
-                <div class="min-w-0 space-y-1">
-                  <div class="app-summary-title-strong truncate">{{ session.sessionCode || session.sessionId }}</div>
-                  <div class="app-summary-subtitle-muted truncate">
-                    {{ session.taskCode || `#${session.taskId}` }} · {{ session.taskName }}
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section class="min-w-0">
-              <div class="app-summary-meta-inline">
-                <span><strong>被试</strong> {{ session.subjectCode || "-" }}</span>
-                <span>·</span>
-                <span><strong>动作</strong> {{ session.actionName || "-" }}</span>
-                <span>·</span>
-                <span><strong>Profile</strong> {{ session.profileName || "-" }}</span>
-                <span>·</span>
-                <span><strong>时间</strong> {{ formatDateTime(session.startedAt || session.createdAt) }}</span>
-              </div>
-            </section>
-
-            <section class="min-w-0 space-y-1">
-              <div class="app-summary-meta-inline">
-                <span><strong>模态</strong> {{ session.modality || "-" }}</span>
-              </div>
-              <div class="app-summary-stat-inline">
-                <span>资产 <strong>{{ session.assetCount ?? 0 }}</strong></span>
-                <span>·</span>
-                <span>文件 <strong>{{ session.fileCount ?? 0 }}</strong></span>
-                <span>·</span>
-                <span>{{ formatFileSize(session.totalSize ?? 0) }}</span>
-              </div>
-              <div class="app-summary-subtitle-muted truncate">{{ session.sourceSummary || "暂无资产摘要" }}</div>
-            </section>
-
-            <section class="min-w-0">
-              <div class="app-status-stack justify-start lg:justify-end">
-                <StatusBadge :status="session.uploadStatus" />
-                <StatusBadge :status="session.qcStatus" />
-                <StatusBadge :status="session.exportStatus" />
-              </div>
-            </section>
-
-            <section class="min-w-0">
-              <div class="app-action-group">
-                <BaseButton size="sm" variant="soft" tone="session" :to="`/play/${session.sessionId}`">
-                  <BaseIcon name="play" size="sm" />
-                  播放
-                </BaseButton>
-                <BaseButton size="sm" variant="ghost" :to="`/sessions/${session.sessionId}`">详情</BaseButton>
-                <BaseButton
-                  size="sm"
-                  variant="secondary"
-                  tone="export"
-                  :to="session.exportStatus === 'READY' ? `/export?sessionId=${session.sessionId}` : undefined"
-                  :disabled="session.exportStatus !== 'READY'"
-                >
-                  导出
-                </BaseButton>
-              </div>
-            </section>
-          </div>
-        </article>
+      <div class="light2-sel">
+        <select v-model="listQuery.exportStatus" @change="applyQuery">
+          <option value="">全部导出</option>
+          <option v-for="o in exportOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+        </select>
       </div>
-
-      <div v-else class="px-5 py-12 text-center text-sm text-[var(--color-text-secondary)]">
-        {{ emptyText }}
+      <div class="light2-sel">
+        <select v-model="sortState.field" @change="updateSortField(sortState.field)">
+          <option v-for="o in sortOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+        </select>
       </div>
+      <button class="light2-btn light2-btn-primary light2-btn-sm" @click="applyQuery">搜索</button>
+      <button class="light2-btn light2-btn-sec light2-btn-sm" @click="resetQuery">重置</button>
+    </div>
 
-      <ListPagination
-        :page="pageState.page"
-        :page-size="pageState.pageSize"
-        :total="pageState.total"
-        @update:page="updatePage"
-      />
-    </section>
+    <!-- table -->
+    <div class="light2-tbl overflow-x-auto">
+      <table class="min-w-[1420px]">
+        <thead>
+          <tr>
+            <th>采集</th>
+            <th>所属任务</th>
+            <th>数据总大小</th>
+            <th>时长</th>
+            <th>被试 - 动作</th>
+            <th>采集员</th>
+            <th>上传时间</th>
+            <th>配置</th>
+            <th>资产 / 文件</th>
+            <th style="width:140px">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="loading">
+            <td colspan="10" style="text-align:center;padding:48px 0;color:var(--color-text-secondary)">正在加载采集列表...</td>
+          </tr>
+          <tr v-else-if="!displayedList.length">
+            <td colspan="10" style="text-align:center;padding:48px 0;color:var(--color-text-secondary)">{{ emptyText }}</td>
+          </tr>
+          <tr v-for="session in displayedList" :key="session.sessionId">
+            <td>
+              <RouterLink :to="`/sessions/${session.sessionId}`" class="light2-code">{{ session.sessionCode || session.sessionId }}</RouterLink>
+              <div v-if="session.sessionCode && session.sessionCode !== session.sessionId" class="light2-tsub">{{ session.sessionId }}</div>
+            </td>
+            <td>
+              <RouterLink :to="`/acquisition/${session.taskId}`" class="light2-tname hover:underline">{{ session.taskName || "-" }}</RouterLink>
+              <div class="light2-tsub">{{ session.taskCode || `#${session.taskId}` }}</div>
+            </td>
+            <td>{{ formatFileSize(session.totalSize || 0) }}</td>
+            <td>-</td>
+            <td>{{ session.subjectCode || "-" }} - {{ session.actionName || "-" }}</td>
+            <td>{{ session.collectorName || "-" }}</td>
+            <td>{{ formatDateTime(session.uploadedAt ?? undefined) }}</td>
+            <td>{{ session.profileName || "-" }}</td>
+            <td class="light2-code">{{ session.assetCount ?? 0 }}/{{ session.fileCount ?? 0 }}</td>
+            <td>
+              <div class="light2-actions">
+                <RouterLink :to="`/play/${session.sessionId}`" class="light2-btn light2-btn-sec light2-btn-sm">播放</RouterLink>
+                <RouterLink :to="`/sessions/${session.sessionId}`" class="light2-btn light2-btn-sec light2-btn-sm">详情</RouterLink>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- pagination -->
+    <div class="light2-pg">
+      <span>第 {{ pageState.page }} 页，共 {{ Math.max(1, Math.ceil(pageState.total / pageState.pageSize)) }} 页 · 总计 {{ pageState.total }} 条</span>
+      <div class="light2-pg-btns">
+        <button :disabled="pageState.page <= 1" @click="updatePage(pageState.page - 1)">← 上一页</button>
+        <button :disabled="pageState.page >= Math.ceil(pageState.total / pageState.pageSize)" @click="updatePage(pageState.page + 1)">下一页 →</button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch, watchEffect } from "vue";
-import { useRoute } from "vue-router";
+import { RouterLink, useRoute } from "vue-router";
 import { fetchSessions } from "@/api/sessions";
-import BaseButton from "@/components/BaseButton.vue";
-import BaseIcon from "@/components/BaseIcon.vue";
-import BusinessMetrics, { type MetricItem } from "@/components/BusinessMetrics.vue";
-import ListPagination from "@/components/ListPagination.vue";
-import PageHeader from "@/components/PageHeader.vue";
-import SearchActionBar from "@/components/SearchActionBar.vue";
-import SortToolbar, { type SortOption } from "@/components/SortToolbar.vue";
-import StatusBadge from "@/components/StatusBadge.vue";
-import type { FilterField } from "@/components/FilterBar.vue";
 import type { SessionListItem } from "@/types/session";
 import { formatDateTime, formatFileSize } from "@/utils/format";
 
@@ -164,7 +122,7 @@ type SessionListQueryState = {
 };
 
 type SessionSortState = {
-  field: "startedAt" | "totalSize" | "fileCount" | "assetCount";
+  field: "createdAt" | "startedAt" | "totalSize" | "fileCount" | "assetCount";
   order: "asc" | "desc";
 };
 
@@ -173,7 +131,6 @@ const route = useRoute();
 const rawList = ref<SessionListItem[]>([]);
 const loading = ref(false);
 const hasLoaded = ref(false);
-const advancedOpen = ref(false);
 
 const pageState = reactive({
   page: 1,
@@ -182,10 +139,11 @@ const pageState = reactive({
 });
 
 const routeTaskId = computed(() => String(route.query.taskId ?? "").trim());
-const listQuery = reactive(createDefaultQuery(routeTaskId.value));
-const appliedQuery = reactive(createDefaultQuery(routeTaskId.value));
+const routeSessionKeyword = computed(() => String(route.query.sessionId ?? route.query.sessionCode ?? "").trim());
+const listQuery = reactive(createDefaultQuery(routeTaskId.value, routeSessionKeyword.value));
+const appliedQuery = reactive(createDefaultQuery(routeTaskId.value, routeSessionKeyword.value));
 const sortState = reactive<SessionSortState>({
-  field: "startedAt",
+  field: "createdAt",
   order: "desc",
 });
 
@@ -196,34 +154,14 @@ const qcOptions = [
   { label: "质检失败", value: "QC_FAILED" },
 ];
 
-const uploadOptions = [
-  { label: "待上传", value: "PENDING" },
-  { label: "上传成功", value: "SUCCESS" },
-  { label: "上传失败", value: "FAILED" },
-  { label: "已上传", value: "UPLOADED" },
-];
-
 const exportOptions = [
   { label: "待导出", value: "PENDING" },
   { label: "可导出", value: "READY" },
 ];
 
-const coreFilterFields: FilterField[] = [
-  { key: "taskNumber", label: "任务编号", placeholder: "任务 ID 或 taskCode" },
-  { key: "sessionNumber", label: "采集编号", placeholder: "sessionId 或 sessionCode" },
-  { key: "qcStatus", label: "质检状态", type: "select", options: qcOptions },
-];
-
-const advancedFilterFields: FilterField[] = [
-  { key: "uploadStatus", label: "上传状态", type: "select", options: uploadOptions },
-  { key: "exportStatus", label: "导出状态", type: "select", options: exportOptions },
-  { key: "modality", label: "模态 / 数据类型", placeholder: "例如 IMU / 视频" },
-  { key: "startedAtFrom", label: "采集时间从", type: "date" },
-  { key: "startedAtTo", label: "采集时间到", type: "date" },
-];
-
-const sortOptions: SortOption[] = [
-  { label: "采集时间", value: "startedAt" },
+const sortOptions = [
+  { label: "最近导入", value: "createdAt" },
+  { label: "时间降序", value: "startedAt" },
   { label: "总大小", value: "totalSize" },
   { label: "文件数", value: "fileCount" },
   { label: "资产数", value: "assetCount" },
@@ -233,7 +171,7 @@ const filteredList = computed(() => rawList.value.filter((item) => matchesSessio
 const sortedList = computed(() => sortSessionList(filteredList.value, sortState));
 const displayedList = computed(() => slicePage(sortedList.value, pageState.page, pageState.pageSize));
 
-const metricItems = computed<MetricItem[]>(() => {
+const metricItems = computed(() => {
   const pendingStatuses = new Set(["PENDING", "WAITING", "FAILED", "ERROR", "QC_FAILED", "QC_WARNING", "RUNNING"]);
   const pendingCount = rawList.value.filter(
     (session) =>
@@ -242,10 +180,10 @@ const metricItems = computed<MetricItem[]>(() => {
       pendingStatuses.has(session.exportStatus),
   ).length;
   return [
-    { label: "采集总数", value: rawList.value.length, icon: "camera", tone: "session" },
-    { label: "资产总数", value: rawList.value.reduce((sum, session) => sum + (session.assetCount ?? 0), 0), icon: "hard-drive", tone: "asset" },
-    { label: "文件总数", value: rawList.value.reduce((sum, session) => sum + (session.fileCount ?? 0), 0), icon: "database", tone: "export" },
-    { label: "异常 / 待处理", value: pendingCount, icon: "shield", tone: "qc" },
+    { label: "采集总数", value: rawList.value.length, tone: "session" },
+    { label: "资产总数", value: rawList.value.reduce((sum, session) => sum + (session.assetCount ?? 0), 0), tone: "asset" },
+    { label: "文件总数", value: rawList.value.reduce((sum, session) => sum + (session.fileCount ?? 0), 0), tone: "export" },
+    { label: "待处理", value: pendingCount, tone: "qc" },
   ];
 });
 
@@ -256,17 +194,6 @@ const emptyText = computed(() => {
   return rawList.value.length === 0 ? "暂无采集数据" : "当前筛选条件下没有匹配结果";
 });
 
-const advancedActive = computed(() => {
-  const queryActive = Boolean(
-    listQuery.uploadStatus ||
-      listQuery.exportStatus ||
-      listQuery.modality ||
-      listQuery.startedAtFrom ||
-      listQuery.startedAtTo,
-  );
-  return queryActive || sortState.field !== "startedAt" || sortState.order !== "desc" || pageState.pageSize !== 10;
-});
-
 watchEffect(() => {
   pageState.total = sortedList.value.length;
   const totalPages = Math.max(1, Math.ceil(pageState.total / pageState.pageSize));
@@ -275,16 +202,10 @@ watchEffect(() => {
   }
 });
 
-watchEffect(() => {
-  if (advancedActive.value) {
-    advancedOpen.value = true;
-  }
-});
-
-function createDefaultQuery(taskId = ""): SessionListQueryState {
+function createDefaultQuery(taskId = "", sessionKeyword = ""): SessionListQueryState {
   return {
     taskNumber: taskId,
-    sessionNumber: "",
+    sessionNumber: sessionKeyword,
     qcStatus: "",
     uploadStatus: "",
     exportStatus: "",
@@ -295,7 +216,7 @@ function createDefaultQuery(taskId = ""): SessionListQueryState {
 }
 
 async function loadSessionRawList() {
-  const page = await fetchSessions({ page: 1, pageSize: 500 });
+  const page = await fetchSessions({ page: 1, pageSize: 500, sortBy: "createdAt", sortOrder: "desc" });
   return page.records;
 }
 
@@ -350,6 +271,8 @@ function sortSessionList(list: SessionListItem[], state: SessionSortState) {
 
 function getSessionSortValue(session: SessionListItem, field: SessionSortState["field"]) {
   switch (field) {
+    case "createdAt":
+      return session.createdAt || "";
     case "totalSize":
       return session.totalSize ?? 0;
     case "fileCount":
@@ -385,28 +308,17 @@ function applyQuery() {
 }
 
 function resetQuery() {
-  const next = createDefaultQuery(routeTaskId.value);
+  const next = createDefaultQuery(routeTaskId.value, routeSessionKeyword.value);
   Object.assign(listQuery, next);
   Object.assign(appliedQuery, next);
   pageState.page = 1;
   pageState.pageSize = 10;
-  sortState.field = "startedAt";
+  sortState.field = "createdAt";
   sortState.order = "desc";
-  advancedOpen.value = false;
 }
 
 function updateSortField(value: string) {
   sortState.field = value as SessionSortState["field"];
-  pageState.page = 1;
-}
-
-function updateSortOrder(value: "asc" | "desc") {
-  sortState.order = value;
-  pageState.page = 1;
-}
-
-function updatePageSize(value: number) {
-  pageState.pageSize = value;
   pageState.page = 1;
 }
 
@@ -415,10 +327,10 @@ function updatePage(page: number) {
 }
 
 watch(
-  () => routeTaskId.value,
-  (taskId) => {
-    Object.assign(listQuery, createDefaultQuery(taskId));
-    Object.assign(appliedQuery, createDefaultQuery(taskId));
+  () => [routeTaskId.value, routeSessionKeyword.value],
+  ([taskId, sessionKeyword]) => {
+    Object.assign(listQuery, createDefaultQuery(taskId, sessionKeyword));
+    Object.assign(appliedQuery, createDefaultQuery(taskId, sessionKeyword));
     pageState.page = 1;
   },
 );

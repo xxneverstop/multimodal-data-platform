@@ -2,8 +2,9 @@
   <div
     class="inline-flex items-center gap-2.5 text-[color:var(--logo-color,currentColor)]"
     :style="{ height: `${resolvedSize}px` }"
-    aria-label="MMDP 多模态数据平台"
+    aria-label="Human+ 多模态数据平台"
   >
+    <!-- H+ 图标 -->
     <svg
       :width="resolvedSize"
       :height="resolvedSize"
@@ -13,49 +14,18 @@
       class="shrink-0"
       aria-hidden="true"
     >
-      <rect x="4" y="4" width="10" height="10" rx="2.5" fill="currentColor" opacity="0.96" />
-      <rect x="18" y="4" width="10" height="10" rx="2.5" fill="currentColor" opacity="0.68" />
-      <rect x="4" y="18" width="10" height="10" rx="2.5" fill="currentColor" opacity="0.68" />
-      <path
-        d="M23 17.5a5.5 5.5 0 1 0 0 11a5.5 5.5 0 0 0 0-11Zm0 2.2a3.3 3.3 0 1 1 0 6.6a3.3 3.3 0 0 1 0-6.6Z"
-        fill="currentColor"
-      />
-      <path d="M14 9h4M9 14v4M18.5 13.5l-2.2 2.2M14 23h3.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      <rect x="4" y="6" width="6" height="20" fill="currentColor" />
+      <rect x="14" y="6" width="6" height="20" fill="currentColor" />
+      <rect x="4" y="13" width="16" height="6" fill="currentColor" />
+      <rect x="22" y="10" width="6" height="12" fill="currentColor" />
+      <rect x="18" y="14" width="14" height="4" fill="currentColor" />
     </svg>
 
-    <svg
-      v-if="showText"
-      :height="resolvedSize"
-      viewBox="0 0 190 32"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      class="min-w-0"
-      aria-hidden="true"
-    >
-      <text
-        x="0"
-        y="13"
-        fill="currentColor"
-        font-size="12"
-        font-weight="700"
-        letter-spacing="0.16em"
-        font-family="Segoe UI, PingFang SC, Microsoft YaHei UI, sans-serif"
-      >
-        MMDP
-      </text>
-      <text
-        x="0"
-        y="26"
-        fill="currentColor"
-        opacity="0.72"
-        font-size="9"
-        font-weight="500"
-        letter-spacing="0.04em"
-        font-family="Segoe UI, PingFang SC, Microsoft YaHei UI, sans-serif"
-      >
-        多模态数据平台
-      </text>
-    </svg>
+    <!-- 文字：HUMAN+ 在左，多模态数据平台在右，同一行 -->
+    <span v-if="showText" class="inline-flex items-baseline gap-2 whitespace-nowrap leading-none">
+      <span class="text-[16px] font-bold tracking-[0.16em]">Human+</span>
+      <span class="text-[14px] font-bold tracking-[0.04em] opacity-70">多模态数据平台</span>
+    </span>
   </div>
 </template>
 
@@ -69,8 +39,8 @@ const props = withDefaults(
   }>(),
   {
     size: 32,
-    showText: true
-  }
+    showText: true,
+  },
 );
 
 const resolvedSize = computed(() => {

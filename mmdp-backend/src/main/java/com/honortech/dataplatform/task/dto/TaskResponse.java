@@ -24,6 +24,8 @@ public record TaskResponse(
         Long sessionCount,
         LocalDateTime latestSessionStartedAt,
         String latestSessionStatus,
+        String latestSessionId,
+        String latestSessionCode,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
