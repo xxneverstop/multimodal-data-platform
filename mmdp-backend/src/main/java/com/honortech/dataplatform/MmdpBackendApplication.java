@@ -15,7 +15,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
         "com.honortech.dataplatform.sessionimport.mapper",
         "com.honortech.dataplatform.subject.mapper",
         "com.honortech.dataplatform.collector.mapper",
-        "com.honortech.dataplatform.profile.mapper"
+        "com.honortech.dataplatform.profile.mapper",
+        "com.honortech.dataplatform.user.mapper"
 })
 public class MmdpBackendApplication {
 

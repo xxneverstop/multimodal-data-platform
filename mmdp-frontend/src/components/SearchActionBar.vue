@@ -1,5 +1,5 @@
 <template>
-  <div class="app-filter-toolbar">
+  <div class="filter-card">
     <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
       <div class="min-w-0 flex-1 space-y-3">
         <FilterBar

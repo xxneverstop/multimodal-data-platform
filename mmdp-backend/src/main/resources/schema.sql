@@ -256,3 +256,22 @@ CREATE TABLE IF NOT EXISTS session_import_record (
     INDEX idx_import_collector_client_id (collector_client_id),
     INDEX idx_import_task_request_id (task_id, request_id)
 ) COMMENT='Session导入记录表';
+CREATE TABLE IF NOT EXISTS sys_user (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '用户主键ID',
+    username VARCHAR(64) NOT NULL COMMENT '登录账号',
+    password_hash VARCHAR(255) NOT NULL COMMENT '密码哈希',
+    display_name VARCHAR(128) NOT NULL COMMENT '展示名称',
+    role_code VARCHAR(32) NOT NULL COMMENT '角色编码',
+    is_admin TINYINT NOT NULL DEFAULT 0 COMMENT '是否管理员',
+    status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE' COMMENT '用户状态',
+    phone VARCHAR(32) NULL COMMENT '手机号',
+    email VARCHAR(128) NULL COMMENT '邮箱',
+    remark VARCHAR(512) NULL COMMENT '备注',
+    last_login_at DATETIME NULL COMMENT '最近登录时间',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    deleted TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除标记',
+    UNIQUE INDEX uk_sys_user_username (username),
+    INDEX idx_sys_user_role_code (role_code),
+    INDEX idx_sys_user_status (status)
+) COMMENT='平台用户表';

@@ -13,6 +13,7 @@ import com.honortech.dataplatform.common.enums.TaskStatus;
 import com.honortech.dataplatform.common.exception.BizException;
 import com.honortech.dataplatform.common.storage.ObjectStat;
 import com.honortech.dataplatform.common.storage.StorageProperties;
+import com.honortech.dataplatform.common.storage.StorageProvider;
 import com.honortech.dataplatform.common.storage.StorageRouter;
 import com.honortech.dataplatform.common.storage.StoredFile;
 import com.honortech.dataplatform.common.storage.TemporaryCredentials;
@@ -266,8 +267,10 @@ public class SessionImportServiceImpl implements SessionImportService {
 
             int createdFileCount = 0;
             int createdAssetCount = 0;
+            String taskCode = firstNonBlank(task.getTaskCode(), "TASK-" + task.getId());
+            Map<String, UploadedObjectRef> archivedByPath = archiveImportedObjects(taskCode, session.getSessionCode(), manifest, uploadedByPath);
 
-            UploadedObjectRef manifestFile = uploadedByPath.get("manifest.json");
+            UploadedObjectRef manifestFile = archivedByPath.get("manifest.json");
             if (manifestFile != null) {
                 createImportedDataFile(task.getId(), session.getId(), "SESSION_MANIFEST", null, manifestFile, AssetType.OTHER);
                 createdFileCount += 1;
@@ -277,7 +280,7 @@ public class SessionImportServiceImpl implements SessionImportService {
             Iterator<String> fieldNames = sourcesNode.fieldNames();
             while (fieldNames.hasNext()) {
                 String sourceKey = fieldNames.next();
-                UploadedObjectRef file = uploadedByPath.get(normalizeEntryPath(requiredSourcePath(sourceKey, sourcesNode.get(sourceKey))));
+                UploadedObjectRef file = archivedByPath.get(normalizeEntryPath(requiredSourcePath(sourceKey, sourcesNode.get(sourceKey))));
                 CollectionProfileSource profileSource = sourceByKey.get(sourceKey.toLowerCase(Locale.ROOT));
                 DataFile dataFile = createImportedDataFile(
                         task.getId(),
@@ -299,7 +302,7 @@ public class SessionImportServiceImpl implements SessionImportService {
             }
 
             for (String artifactPath : collectArtifactPaths(manifest.artifacts())) {
-                UploadedObjectRef file = uploadedByPath.get(artifactPath);
+                UploadedObjectRef file = archivedByPath.get(artifactPath);
                 createImportedDataFile(task.getId(), session.getId(), "SESSION_ARTIFACT", null, file, AssetType.OTHER);
                 createdFileCount += 1;
             }
@@ -797,6 +800,7 @@ public class SessionImportServiceImpl implements SessionImportService {
                 throw new BizException("Manifest source key is not defined in profile: " + sourceKey);
             }
             String path = normalizeEntryPath(requiredSourcePath(sourceKey, sourcesNode.get(sourceKey)));
+            validateSourcePathNamespace(sourceKey, path);
             if (!uploadedByPath.containsKey(path)) {
                 throw new BizException("Manifest source path does not exist in uploaded files: " + path);
             }
@@ -810,6 +814,7 @@ public class SessionImportServiceImpl implements SessionImportService {
         }
 
         for (String artifactPath : collectArtifactPaths(manifest.artifacts())) {
+            validateArtifactPathNamespace(artifactPath);
             if (!uploadedByPath.containsKey(artifactPath)) {
                 throw new BizException("Manifest artifact path does not exist in uploaded files: " + artifactPath);
             }
@@ -822,6 +827,19 @@ public class SessionImportServiceImpl implements SessionImportService {
             throw new BizException("Manifest source missing path: " + sourceKey);
         }
         return path;
+    }
+
+    private void validateSourcePathNamespace(String sourceKey, String path) {
+        String expectedPrefix = "sources/" + sourceKey + "/";
+        if (!path.startsWith(expectedPrefix)) {
+            throw new BizException("Manifest source path must be under " + expectedPrefix + ": " + path);
+        }
+    }
+
+    private void validateArtifactPathNamespace(String path) {
+        if (!path.startsWith("artifacts/")) {
+            throw new BizException("Manifest artifact path must be under artifacts/: " + path);
+        }
     }
 
     private List<String> collectArtifactPaths(JsonNode artifactsNode) {
@@ -873,7 +891,8 @@ public class SessionImportServiceImpl implements SessionImportService {
         dataFile.setFileSize(file.fileSize());
         dataFile.setSha256(file.sha256());
         dataFile.setAssetType(assetType.name());
-        dataFile.setStorageProvider(storageRouter.defaultService().provider().name());
+        StorageProvider storageProvider = storageRouter.defaultService().provider();
+        dataFile.setStorageProvider((storageProvider == null ? StorageProvider.OSS : storageProvider).name());
         dataFile.setBucketName(storageProperties.getOss().getBucket());
         dataFile.setObjectKey(file.objectKey());
         dataFile.setStorageUrl(buildOssStorageUrl(storageProperties.getOss().getBucket(), file.objectKey()));
@@ -892,6 +911,57 @@ public class SessionImportServiceImpl implements SessionImportService {
 
     private String buildOssStorageUrl(String bucketName, String objectKey) {
         return "oss://" + bucketName + "/" + objectKey;
+    }
+
+    private Map<String, UploadedObjectRef> archiveImportedObjects(
+            String taskCode,
+            String sessionCode,
+            NormalizedSessionManifest manifest,
+            Map<String, UploadedObjectRef> uploadedByPath) {
+        Map<String, UploadedObjectRef> archivedByPath = new LinkedHashMap<>();
+        archiveImportedObject(archivedByPath, uploadedByPath.get("manifest.json"), taskCode, sessionCode);
+
+        JsonNode sourcesNode = manifest.sources();
+        Iterator<String> fieldNames = sourcesNode.fieldNames();
+        while (fieldNames.hasNext()) {
+            String sourceKey = fieldNames.next();
+            String sourcePath = normalizeEntryPath(requiredSourcePath(sourceKey, sourcesNode.get(sourceKey)));
+            archiveImportedObject(archivedByPath, uploadedByPath.get(sourcePath), taskCode, sessionCode);
+        }
+
+        for (String artifactPath : collectArtifactPaths(manifest.artifacts())) {
+            archiveImportedObject(archivedByPath, uploadedByPath.get(artifactPath), taskCode, sessionCode);
+        }
+        return archivedByPath;
+    }
+
+    private void archiveImportedObject(
+            Map<String, UploadedObjectRef> archivedByPath,
+            UploadedObjectRef file,
+            String taskCode,
+            String sessionCode) {
+        if (file == null) {
+            return;
+        }
+        String archivedObjectKey = buildArchivedImportObjectKey(taskCode, sessionCode, file.relativePath());
+        storageRouter.defaultService().copyObject(
+                storageProperties.getOss().getBucket(),
+                file.objectKey(),
+                storageProperties.getOss().getBucket(),
+                archivedObjectKey
+        );
+        archivedByPath.put(file.relativePath(), new UploadedObjectRef(
+                file.originalFilename(),
+                file.relativePath(),
+                archivedObjectKey,
+                file.contentType(),
+                file.fileSize(),
+                file.sha256()
+        ));
+    }
+
+    private String buildArchivedImportObjectKey(String taskCode, String sessionCode, String relativePath) {
+        return "tasks/" + taskCode + "/sessions/" + sessionCode + "/imports/" + normalizeEntryPath(relativePath);
     }
 
     private String buildImportObjectKey(Long taskId, String importKey, String relativePath) {

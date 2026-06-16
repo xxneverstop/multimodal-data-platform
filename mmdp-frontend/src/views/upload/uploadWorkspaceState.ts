@@ -110,6 +110,5 @@ export function clearWorkspace(options?: {
   uploadWorkspaceState.batchSessionId.value = null;
   uploadWorkspaceState.batchSessionCode.value = "";
   uploadWorkspaceState.uploadError.value = false;
-  uploadWorkspaceState.submitting.value = false;
   uploadWorkspaceState.message.value = showMessage ? "当前上传工作台已清空。" : "";
 }

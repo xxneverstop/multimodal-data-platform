@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS collection_session (
     duration_ms BIGINT NULL COMMENT '时长毫秒',
     timestamp_policy VARCHAR(64) NULL COMMENT '时间戳策略',
     manifest_json TEXT NOT NULL COMMENT 'Session manifest JSON',
-    upload_status VARCHAR(32) NOT NULL DEFAULT 'UPLOADED' COMMENT '上传状态',
+    upload_status VARCHAR(32) NOT NULL DEFAULT 'RECEIVED' COMMENT '上传状态',
     session_status VARCHAR(32) NOT NULL DEFAULT 'IMPORTED' COMMENT 'Session状态',
     created_at DATETIME NOT NULL COMMENT '创建时间',
     updated_at DATETIME NULL COMMENT '更新时间',
@@ -140,7 +140,7 @@ CREATE TABLE IF NOT EXISTS data_file (
     file_size BIGINT NOT NULL COMMENT '文件大小',
     sha256 VARCHAR(64) NULL COMMENT '文件哈希',
     asset_type VARCHAR(64) NULL COMMENT '资产类型提示',
-	storage_provider VARCHAR(32) NOT NULL DEFAULT 'OSS' COMMENT 'storage provider',
+    storage_provider VARCHAR(32) NOT NULL DEFAULT 'OSS' COMMENT 'storage provider',
     bucket_name VARCHAR(128) NOT NULL COMMENT '对象存储桶名',
     object_key VARCHAR(255) NOT NULL COMMENT '对象存储key',
     storage_url VARCHAR(512) NOT NULL COMMENT '存储访问地址',
@@ -158,6 +158,7 @@ CREATE TABLE IF NOT EXISTS qc_report (
     task_id BIGINT NOT NULL COMMENT '关联采集任务ID',
     session_id BIGINT NULL COMMENT '关联Session记录ID',
     file_id BIGINT NOT NULL COMMENT '关联数据文件ID',
+    qc_type VARCHAR(32) NOT NULL DEFAULT 'FILE' COMMENT '质检类型：FILE=单文件，SESSION=跨文件',
     qc_status VARCHAR(32) NOT NULL COMMENT '质检状态',
     summary VARCHAR(512) NOT NULL COMMENT '质检摘要',
     report_json TEXT NOT NULL COMMENT '质检报告JSON',
@@ -252,5 +253,6 @@ CREATE TABLE IF NOT EXISTS session_import_record (
     CONSTRAINT fk_session_import_record_collector_client FOREIGN KEY (collector_client_id) REFERENCES collector_client(id),
     CONSTRAINT fk_session_import_record_archive_file FOREIGN KEY (archive_file_id) REFERENCES data_file(id),
     UNIQUE INDEX idx_session_import_local_session_id (local_session_id),
-    INDEX idx_import_collector_client_id (collector_client_id)
+    INDEX idx_import_collector_client_id (collector_client_id),
+    INDEX idx_import_task_request_id (task_id, request_id)
 ) COMMENT='Session导入记录表';

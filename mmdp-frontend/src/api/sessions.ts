@@ -45,6 +45,8 @@ export interface SessionResponse {
   durationMs: number | null;
   uploadStatus: string;
   sessionStatus?: string | null;
+  collectorName?: string | null;
+  uploadedAt?: string | null;
   createdAt: string;
   assets: any[];
 }
@@ -112,6 +114,8 @@ export async function fetchAllSessions(): Promise<SessionResponse[]> {
     durationMs: null,
     uploadStatus: item.uploadStatus,
     sessionStatus: item.qcStatus,
+    collectorName: item.collectorName ?? null,
+    uploadedAt: item.uploadedAt ?? null,
     createdAt: item.createdAt,
     assets: [],
   }));

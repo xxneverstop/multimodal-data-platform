@@ -1,136 +1,107 @@
 <template>
-  <div class="space-y-5">
-    <PageHeader
-      surface="plain"
-      eyebrow="功能 / 任务"
-      title="任务"
-      description="查看任务、采集进展和处理状态，快速进入采集、详情或播放流程。"
-    />
-
-    <BusinessMetrics :items="metricItems" />
-
-    <section class="app-list-panel">
-      <div class="app-list-panel-section app-list-panel-section-muted">
-        <SearchActionBar
-          v-model="listQuery"
-          :core-fields="coreFilterFields"
-          :advanced-fields="advancedFilterFields"
-          :advanced-open="advancedOpen"
-          :advanced-active="advancedActive"
-          search-tone="task"
-          @update:advanced-open="advancedOpen = $event"
-          @search="applyQuery"
-          @reset="resetQuery"
-        >
-          <template #actions>
-            <BaseButton variant="secondary" size="md" @click="dialogOpen = true">
-              <BaseIcon name="plus" size="sm" />
-              新建任务
-            </BaseButton>
-          </template>
-
-          <template #advanced>
-            <SortToolbar
-              compact
-              :sort-field="sortState.field"
-              :sort-order="sortState.order"
-              :page-size="pageState.pageSize"
-              :sort-options="sortOptions"
-              @update:sort-field="updateSortField"
-              @update:sort-order="updateSortOrder"
-              @update:page-size="updatePageSize"
-            />
-          </template>
-        </SearchActionBar>
+  <div class="light2-page">
+    <!-- header -->
+    <div class="light2-hdr">
+      <div>
+        <h1>任务中心</h1>
+        <p>管理采集任务 · 查看进度 · 进入工作区</p>
       </div>
+      <button class="light2-btn light2-btn-primary" @click="dialogOpen = true">+ 新建任务</button>
+    </div>
 
-      <div class="app-column-strip lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1.3fr)_minmax(220px,0.95fr)_minmax(180px,0.8fr)_auto]">
-        <div>任务</div>
-        <div>对象信息</div>
-        <div>采集摘要</div>
-        <div class="text-right">状态</div>
-        <div class="text-right">操作</div>
+    <!-- metrics -->
+    <div class="light2-metrics">
+      <div v-for="m in metricItems" :key="m.label" class="light2-mcard">
+        <div class="light2-mstripe" :style="{ background: m.tone === 'task' ? 'var(--color-brand-500)' : m.tone === 'session' ? '#0d9444' : m.tone === 'asset' ? '#7c3aed' : '#e3740a' }" />
+        <div class="light2-mlabel">{{ m.label }}</div>
+        <div class="light2-mvalue">{{ m.value }}</div>
       </div>
+    </div>
 
-      <div v-if="loading" class="px-5 py-12 text-center text-sm text-[var(--color-text-secondary)]">
-        正在加载任务列表...
+    <!-- filters -->
+    <div class="light2-filters">
+      <input v-model="listQuery.keyword" type="text" placeholder="搜索任务编号 / 名称 / 被试..." class="light2-input" @keyup.enter="applyQuery" />
+      <div class="light2-sel">
+        <select v-model="listQuery.status" @change="applyQuery">
+          <option value="">全部状态</option>
+          <option v-for="o in statusOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+        </select>
       </div>
-
-      <div v-else-if="displayedList.length" class="app-summary-list">
-        <article v-for="task in displayedList" :key="task.id" class="app-summary-row app-row-accent-task">
-          <div class="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1.3fr)_minmax(220px,0.95fr)_minmax(180px,0.8fr)_auto] lg:items-center">
-            <section class="min-w-0">
-              <div class="flex items-start gap-3">
-                <div class="app-metric-icon app-tone-task mt-0.5 h-8 w-8 shrink-0">
-                  <BaseIcon name="clipboard-check" size="sm" />
-                </div>
-                <div class="min-w-0 space-y-1">
-                  <div class="app-summary-title-strong truncate">{{ task.taskName }}</div>
-                  <div class="app-summary-subtitle-muted">
-                    {{ task.taskCode || `#${task.id}` }}
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section class="min-w-0">
-              <div class="app-summary-meta-inline">
-                <span><strong>被试</strong> {{ task.subjectCode || "-" }}</span>
-                <span>·</span>
-                <span><strong>动作</strong> {{ task.actionName || "-" }}</span>
-                <span>·</span>
-                <span><strong>Profile</strong> {{ task.profileName || "-" }}</span>
-                <span>·</span>
-                <span><strong>日期</strong> {{ task.collectDate || "-" }}</span>
-              </div>
-            </section>
-
-            <section class="min-w-0 space-y-1">
-              <div class="app-summary-stat-inline">
-                <span><strong>{{ task.sessionCount ?? 0 }}</strong> 次采集</span>
-                <span>·</span>
-                <span>最近 {{ formatDateTime(task.latestSessionStartedAt || "") }}</span>
-              </div>
-            </section>
-
-            <section class="min-w-0">
-              <div class="app-status-stack justify-start lg:justify-end">
-                <StatusBadge :status="task.status" />
-                <StatusBadge
-                  :status="task.latestSessionStatus || 'PENDING'"
-                  :label="`最近 ${formatStatusLabel(task.latestSessionStatus || 'PENDING')}`"
-                />
-              </div>
-            </section>
-
-            <section class="min-w-0">
-              <div class="app-action-group">
-                <BaseButton size="sm" variant="soft" tone="task" :to="`/sessions?taskId=${task.id}`">
-                  查看采集({{ task.sessionCount ?? 0 }})
-                </BaseButton>
-                <BaseButton size="sm" variant="ghost" :to="`/acquisition/${task.id}`">详情</BaseButton>
-                <BaseButton size="sm" variant="ghost" :to="`/sessions?taskId=${task.id}`">
-                  <BaseIcon name="play" size="sm" />
-                  播放
-                </BaseButton>
-              </div>
-            </section>
-          </div>
-        </article>
+      <div class="light2-sel">
+        <select v-model="sortState.field" @change="updateSortField(sortState.field)">
+          <option v-for="o in sortOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+        </select>
       </div>
+      <button class="light2-btn light2-btn-primary light2-btn-sm" @click="applyQuery">搜索</button>
+      <button class="light2-btn light2-btn-sec light2-btn-sm" @click="resetQuery">重置</button>
+    </div>
 
-      <div v-else class="px-5 py-12 text-center text-sm text-[var(--color-text-secondary)]">
-        {{ emptyText }}
+    <!-- table -->
+    <div class="light2-tbl overflow-x-auto">
+      <table class="min-w-[1180px]">
+        <thead>
+          <tr>
+            <th>任务编号</th>
+            <th>任务名称</th>
+            <th>配置</th>
+            <th>创建时间</th>
+            <th>采集数</th>
+            <th>最新采集时间</th>
+            <th>最新采集</th>
+            <th>任务状态</th>
+            <th style="width:150px">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="loading">
+            <td colspan="9" style="text-align:center;padding:48px 0;color:var(--color-text-secondary)">正在加载任务列表...</td>
+          </tr>
+          <tr v-else-if="!displayedList.length">
+            <td colspan="9" style="text-align:center;padding:48px 0;color:var(--color-text-secondary)">{{ emptyText }}</td>
+          </tr>
+          <tr v-for="task in displayedList" :key="task.id">
+            <td>
+              <RouterLink :to="`/acquisition/${task.id}`" class="light2-code">{{ task.taskCode || `#${task.id}` }}</RouterLink>
+            </td>
+            <td>
+              <RouterLink :to="`/acquisition/${task.id}`" class="light2-tname hover:underline">{{ task.taskName }}</RouterLink>
+            </td>
+            <td>{{ task.profileName || "-" }}</td>
+            <td>{{ formatDateTime(task.createdAt) }}</td>
+            <td class="light2-code">{{ task.sessionCount ?? 0 }}</td>
+            <td>{{ formatDateTime(task.latestSessionStartedAt ?? undefined) }}</td>
+            <td>
+              <RouterLink
+                v-if="task.latestSessionId && latestSessionLabel(task)"
+                :to="`/sessions/${task.latestSessionId}`"
+                class="light2-code"
+              >
+                {{ latestSessionLabel(task) }}
+              </RouterLink>
+              <span v-else>{{ latestSessionLabel(task) || "-" }}</span>
+            </td>
+            <td><span class="light2-badge" :class="badgeClass(task.status)"><span class="light2-bdot" :style="{ background: badgeColor(task.status) }" />{{ formatStatusLabel(task.status) }}</span></td>
+            <td>
+              <div class="light2-actions">
+                <RouterLink :to="`/sessions?taskId=${task.id}`" class="light2-btn light2-btn-sec light2-btn-sm">查看采集</RouterLink>
+                <RouterLink :to="`/acquisition/${task.id}`" class="light2-btn light2-btn-sec light2-btn-sm">详情</RouterLink>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- pagination -->
+    <div class="light2-pg">
+      <span>第 {{ pageState.page }} 页，共 {{ Math.max(1, Math.ceil(pageState.total / pageState.pageSize)) }} 页 · 总计 {{ pageState.total }} 条</span>
+      <div class="light2-pg-btns">
+        <button :disabled="pageState.page <= 1" @click="updatePage(pageState.page - 1)">← 上一页</button>
+        <button :disabled="pageState.page >= Math.ceil(pageState.total / pageState.pageSize)" @click="updatePage(pageState.page + 1)">下一页 →</button>
       </div>
+    </div>
 
-      <ListPagination
-        :page="pageState.page"
-        :page-size="pageState.pageSize"
-        :total="pageState.total"
-        @update:page="updatePage"
-      />
-    </section>
-
+    <!-- dialog -->
     <AppDialog
       :open="dialogOpen"
       title="新建任务"
@@ -173,20 +144,11 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watchEffect } from "vue";
-import { useRouter } from "vue-router";
+import { RouterLink, useRouter } from "vue-router";
 import { fetchCollectionProfiles, type CollectionProfileResponse } from "@/api/profiles";
 import { fetchSessions } from "@/api/sessions";
 import { createTask, fetchTasks } from "@/api/tasks";
 import AppDialog from "@/components/AppDialog.vue";
-import BaseButton from "@/components/BaseButton.vue";
-import BaseIcon from "@/components/BaseIcon.vue";
-import BusinessMetrics, { type MetricItem } from "@/components/BusinessMetrics.vue";
-import ListPagination from "@/components/ListPagination.vue";
-import PageHeader from "@/components/PageHeader.vue";
-import SearchActionBar from "@/components/SearchActionBar.vue";
-import SortToolbar, { type SortOption } from "@/components/SortToolbar.vue";
-import StatusBadge from "@/components/StatusBadge.vue";
-import type { FilterField } from "@/components/FilterBar.vue";
 import type { SessionListItem } from "@/types/session";
 import type { CreateTaskRequest, TaskResponse } from "@/types/task";
 import { formatDateTime, formatStatusLabel } from "@/utils/format";
@@ -215,9 +177,9 @@ const hasLoaded = ref(false);
 const dialogOpen = ref(false);
 const submitting = ref(false);
 const message = ref("");
-const advancedOpen = ref(false);
 const profiles = ref<CollectionProfileResponse[]>([]);
 const profileIdValue = ref("");
+const advancedOpen = ref(false);
 
 const pageState = reactive({
   page: 1,
@@ -258,23 +220,10 @@ const statusOptions = [
   { label: "质检失败", value: "QC_FAILED" },
 ];
 
-const coreFilterFields: FilterField[] = [
-  { key: "keyword", label: "关键字", placeholder: "任务名称 / 被试 / 动作" },
-  { key: "taskNumber", label: "任务编号", placeholder: "任务 ID 或 taskCode" },
-  { key: "status", label: "状态", type: "select", options: statusOptions },
-];
-
-const advancedFilterFields: FilterField[] = [
-  { key: "subjectCode", label: "被试", placeholder: "输入被试编号" },
-  { key: "actionName", label: "动作", placeholder: "输入动作名称" },
-  { key: "collectDateFrom", label: "采集日期从", type: "date" },
-  { key: "collectDateTo", label: "采集日期到", type: "date" },
-];
-
-const sortOptions: SortOption[] = [
-  { label: "创建时间", value: "createdAt" },
-  { label: "采集日期", value: "collectDate" },
-  { label: "最近采集时间", value: "latestSessionStartedAt" },
+const sortOptions = [
+  { label: "日期降序", value: "createdAt" },
+  { label: "日期升序", value: "collectDate" },
+  { label: "最近采集", value: "latestSessionStartedAt" },
   { label: "采集数", value: "sessionCount" },
 ];
 
@@ -282,18 +231,40 @@ const filteredList = computed(() => rawList.value.filter((item) => matchesTaskQu
 const sortedList = computed(() => sortTaskList(filteredList.value, sortState));
 const displayedList = computed(() => slicePage(sortedList.value, pageState.page, pageState.pageSize));
 
-const metricItems = computed<MetricItem[]>(() => {
+const metricItems = computed(() => {
   const sessionTotal = rawList.value.reduce((sum, task) => sum + (task.sessionCount ?? 0), 0);
   const assetTotal = metricSessions.value.reduce((sum, session) => sum + (session.assetCount ?? 0), 0);
   const processingStatuses = new Set(["CREATED", "PENDING", "RUNNING", "UPLOADING", "ACTIVE"]);
   const processingTotal = rawList.value.filter((task) => processingStatuses.has(task.status)).length;
   return [
-    { label: "任务总数", value: rawList.value.length, icon: "clipboard-check", tone: "task" },
-    { label: "采集总数", value: sessionTotal, icon: "camera", tone: "session" },
-    { label: "资产总数", value: assetTotal, icon: "hard-drive", tone: "asset" },
-    { label: "处理中任务", value: processingTotal, icon: "workflow", tone: "process" },
+    { label: "任务总数", value: rawList.value.length, tone: "task" },
+    { label: "采集总数", value: sessionTotal, tone: "session" },
+    { label: "资产总数", value: assetTotal, tone: "asset" },
+    { label: "异常任务", value: processingTotal, tone: "process" },
   ];
 });
+
+const BADGE_MAP: Record<string, { cls: string; color: string }> = {
+  ACTIVE: { cls: "light2-badge-info", color: "var(--color-brand-500)" },
+  CREATED: { cls: "light2-badge-neutral", color: "#9298a3" },
+  COMPLETED: { cls: "light2-badge-ok", color: "#0d7d3e" },
+  ERROR: { cls: "light2-badge-err", color: "#c5222f" },
+  FAILED: { cls: "light2-badge-err", color: "#c5222f" },
+  QC_PASSED: { cls: "light2-badge-ok", color: "#0d7d3e" },
+  QC_WARNING: { cls: "light2-badge-warn", color: "#b87a0a" },
+  QC_FAILED: { cls: "light2-badge-err", color: "#c5222f" },
+  PENDING: { cls: "light2-badge-neutral", color: "#9298a3" },
+  RUNNING: { cls: "light2-badge-warn", color: "#b87a0a" },
+  UPLOADING: { cls: "light2-badge-info", color: "var(--color-brand-500)" },
+  UPLOADED: { cls: "light2-badge-ok", color: "#0d7d3e" },
+  SUCCESS: { cls: "light2-badge-ok", color: "#0d7d3e" },
+};
+function badgeClass(status: string) {
+  return BADGE_MAP[status]?.cls ?? "light2-badge-neutral";
+}
+function badgeColor(status: string) {
+  return BADGE_MAP[status]?.color ?? "#9298a3";
+}
 
 const emptyText = computed(() => {
   if (!hasLoaded.value || loading.value) {
@@ -399,6 +370,10 @@ function getTaskSortValue(task: TaskResponse, field: TaskSortState["field"]) {
     default:
       return task.createdAt || "";
   }
+}
+
+function latestSessionLabel(task: TaskResponse) {
+  return task.latestSessionCode || task.latestSessionId || "";
 }
 
 function slicePage<T>(list: T[], page: number, pageSize: number) {

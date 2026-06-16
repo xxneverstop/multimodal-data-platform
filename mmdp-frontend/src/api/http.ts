@@ -3,7 +3,8 @@ import type { ApiResponse } from "@/types/api";
 
 const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL?.trim() || "/",
-  timeout: 15000
+  timeout: 15000,
+  withCredentials: true,
 });
 
 http.interceptors.response.use(
@@ -18,11 +19,17 @@ http.interceptors.response.use(
     return payload.data;
   },
   (error) => {
-    const message =
-      error?.response?.data?.message ||
-      error?.message ||
-      "网络请求失败";
-    return Promise.reject(new Error(message));
+    const status = error?.response?.status as number | undefined;
+    const message = error?.response?.data?.message || error?.message || "网络请求失败";
+    const normalizedError = new Error(message) as Error & { status?: number };
+    normalizedError.status = status;
+    if (status === 401 && typeof window !== "undefined") {
+      const requestUrl = String(error?.config?.url || "");
+      if (!requestUrl.includes("/api/auth/login") && !requestUrl.includes("/api/auth/me")) {
+        window.dispatchEvent(new CustomEvent("mmdp-auth-expired"));
+      }
+    }
+    return Promise.reject(normalizedError);
   }
 );
 

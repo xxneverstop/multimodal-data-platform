@@ -21,6 +21,8 @@ export interface TaskResponse {
   sessionCount?: number;
   latestSessionStartedAt?: string | null;
   latestSessionStatus?: string | null;
+  latestSessionId?: string | null;
+  latestSessionCode?: string | null;
   createdAt: string;
   updatedAt: string;
 }

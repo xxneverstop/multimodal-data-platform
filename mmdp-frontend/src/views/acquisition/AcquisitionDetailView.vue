@@ -1,161 +1,195 @@
 <template>
-  <div v-if="detail" class="space-y-5">
-    <PageHeader
-      eyebrow="任务 Workspace"
-      :title="detail.task.taskName"
-      description="任务页聚焦管理当前任务下的采集进展。"
-      surface="plain"
-    >
-      <template #actions>
-        <div class="flex flex-wrap items-center justify-end gap-2">
-          <StatusBadge :status="detail.task.status" />
-          <BaseButton variant="soft" tone="task" :to="`/upload?taskId=${detail.task.id}`">上传数据</BaseButton>
-          <BaseButton :to="`/sessions?taskId=${detail.task.id}`">查看采集</BaseButton>
+  <div v-if="detail" class="light2-page">
+    <div class="light2-hdr">
+      <div class="min-w-0">
+        <div class="mb-2 flex flex-wrap items-center gap-2">
+          <span class="light2-badge light2-badge-neutral">
+            <span class="light2-bdot" style="background: #9298a3" />
+            任务详情
+          </span>
+          <span class="light2-badge" :class="badgeClass(detail.task.status)">
+            <span class="light2-bdot" :style="{ background: badgeColor(detail.task.status) }" />
+            {{ formatStatusLabel(detail.task.status) }}
+          </span>
         </div>
-      </template>
-    </PageHeader>
+        <h1>{{ detail.task.taskName }}</h1>
+        <p>
+          {{ detail.task.taskCode || `#${detail.task.id}` }}
+          路
+          {{ detail.task.subjectCode || "-" }}
+          路
+          {{ detail.task.actionName || "-" }}
+          路
+          {{ detail.task.profileName || "-" }}
+          路
+          {{ detail.task.collectDate || "-" }}
+        </p>
+      </div>
 
-    <WorkspaceOverviewBar :items="overviewItems" :secondary="overviewSecondary" />
-
-    <div class="grid gap-3 xl:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)]">
-      <section class="workspace-section-secondary">
-        <div class="mb-2 text-[11px] font-medium tracking-[0.08em] text-[var(--color-text-tertiary)]">进度状态</div>
-        <WorkflowTimeline :stages="taskStages" compact />
-      </section>
-
-      <section class="workspace-section-secondary">
-        <div class="mb-2 text-[11px] font-medium tracking-[0.08em] text-[var(--color-text-tertiary)]">健康提示</div>
-        <WorkspaceHealthSummary :items="compactHealthItems" compact />
-      </section>
+      <div class="light2-actions">
+        <RouterLink :to="`/upload?taskId=${detail.task.id}`" class="light2-btn light2-btn-primary">
+          上传数据
+        </RouterLink>
+        <RouterLink :to="`/sessions?taskId=${detail.task.id}`" class="light2-btn light2-btn-sec">
+          查看采集
+        </RouterLink>
+      </div>
     </div>
 
-    <BusinessMetrics :items="metricItems" />
-
-    <PageCard eyebrow="核心工作区" title="Session Workspace" description="这是任务页唯一核心区，直接管理这个任务下的采集进展。">
-      <div v-if="sortedSessions.length" class="space-y-2">
-        <article
-          v-for="(session, index) in sortedSessions"
-          :key="session.sessionId"
-          class="workspace-core-row app-row-accent-task"
-        >
-          <div class="min-w-0 flex-1 space-y-2">
-            <div class="flex flex-wrap items-center gap-2">
-              <div class="app-summary-title-strong">{{ session.sessionCode || session.sessionId }}</div>
-              <span
-                v-if="index === 0"
-                class="rounded-full border border-[var(--module-task-soft-border)] bg-[var(--module-task-soft-bg)] px-2 py-0.5 text-[11px] font-medium text-[var(--module-task-soft-text)]"
-              >
-                最近更新
-              </span>
-              <span
-                class="rounded-full border border-[var(--module-task-soft-border)] bg-[var(--module-task-soft-bg)] px-2 py-0.5 text-[11px] font-medium text-[var(--module-task-soft-text)]"
-              >
-                {{ sessionHealthLabel(session) }}
-              </span>
-            </div>
-            <div class="app-summary-subtitle-muted">{{ session.sourceSummary || session.modality || "暂无数据类型摘要" }}</div>
-            <div class="app-summary-meta-inline">
-              <span>被试 <strong>{{ session.subjectCode || "-" }}</strong></span>
-              <span>·</span>
-              <span>动作 <strong>{{ session.actionName || "-" }}</strong></span>
-              <span>·</span>
-              <span>Profile <strong>{{ session.profileName || session.profileCode || "-" }}</strong></span>
-            </div>
-            <div class="app-summary-stat-inline">
-              <span>资产 <strong>{{ session.assetCount }}</strong></span>
-              <span>文件 <strong>{{ session.fileCount }}</strong></span>
-              <span>更新 {{ sessionUpdatedAt(session) }}</span>
-            </div>
-          </div>
-
-          <div class="flex min-w-[180px] flex-col items-start gap-2 xl:items-end">
-            <div class="app-status-stack">
-              <StatusBadge :status="session.exportStatus" />
-              <StatusBadge :status="session.qcStatus" />
-              <StatusBadge :status="session.processingStatus" />
-            </div>
-            <div class="app-action-group">
-              <BaseButton size="sm" variant="soft" tone="task" :to="`/sessions/${session.sessionId}`">查看采集</BaseButton>
-              <BaseButton size="sm" variant="ghost" :to="`/play/${session.sessionId}`">播放</BaseButton>
-              <BaseButton size="sm" variant="ghost" :to="`/sessions/${session.sessionId}`">详情</BaseButton>
-            </div>
-          </div>
-        </article>
+    <div class="light2-metrics">
+      <div v-for="m in metricItems" :key="m.label" class="light2-mcard">
+        <div class="light2-mstripe" :style="{ background: metricColor(m.tone) }" />
+        <div class="light2-mlabel">{{ m.label }}</div>
+        <div class="light2-mvalue">{{ m.value }}</div>
+        <div class="light2-tsub mt-2">{{ m.caption }}</div>
       </div>
-      <div v-else class="workspace-muted-empty">当前任务尚未产出采集会话，建议先上传数据或进入采集流程。</div>
-    </PageCard>
+    </div>
 
-    <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-      <section class="workspace-section-secondary">
-        <div class="mb-3 text-[11px] font-medium tracking-[0.08em] text-[var(--color-text-tertiary)]">下一步</div>
-        <NextActionsPanel :actions="nextActions" />
+    <div class="light2-tbl overflow-x-auto">
+      <table class="min-w-[1420px]">
+        <thead>
+          <tr>
+            <th>采集</th>
+            <th>所属任务</th>
+            <th>数据总大小</th>
+            <th>时长</th>
+            <th>被试 - 动作</th>
+            <th>采集员</th>
+            <th>上传时间</th>
+            <th>配置</th>
+            <th>资产 / 文件</th>
+            <th style="width: 140px">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="!sortedSessions.length">
+            <td colspan="10" style="text-align: center; padding: 48px 0; color: var(--color-text-secondary)">
+              当前任务还没有采集会话，建议先上传数据或进入采集流程。
+            </td>
+          </tr>
+          <tr v-for="(session, index) in sortedSessions" :key="session.sessionId">
+            <td>
+              <div class="flex flex-wrap items-center gap-2">
+                <RouterLink :to="`/sessions/${session.sessionId}`" class="light2-code">
+                  {{ session.sessionCode || session.sessionId }}
+                </RouterLink>
+                <span v-if="index === 0" class="light2-badge light2-badge-info">
+                  <span class="light2-bdot" style="background: var(--color-brand-500)" />
+                  最新采集
+                </span>
+              </div>
+              <div v-if="session.sessionCode && session.sessionCode !== session.sessionId" class="light2-tsub">{{ session.sessionId }}</div>
+            </td>
+            <td>
+              <RouterLink :to="`/acquisition/${session.taskId}`" class="light2-tname hover:underline">{{ session.taskName || "-" }}</RouterLink>
+              <div class="light2-tsub">{{ session.taskCode || `#${session.taskId}` }}</div>
+            </td>
+            <td>{{ formatFileSize(session.totalSize || 0) }}</td>
+            <td>-</td>
+            <td>{{ session.subjectCode || "-" }} - {{ session.actionName || "-" }}</td>
+            <td>{{ session.collectorName || "-" }}</td>
+            <td>{{ formatDateTime(session.uploadedAt ?? undefined) }}</td>
+            <td>{{ session.profileName || session.profileCode || "-" }}</td>
+            <td class="light2-code">{{ session.assetCount ?? 0 }}/{{ session.fileCount ?? 0 }}</td>
+            <td>
+              <div class="light2-actions">
+                <RouterLink :to="`/play/${session.sessionId}`" class="light2-btn light2-btn-sec light2-btn-sm">播放</RouterLink>
+                <RouterLink :to="`/sessions/${session.sessionId}`" class="light2-btn light2-btn-sec light2-btn-sm">详情</RouterLink>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid gap-4 xl:grid-cols-3">
+      <section class="rounded-[16px] border border-[var(--color-border-soft)] bg-white px-4 py-4 shadow-[var(--shadow-card)]">
+        <div class="mb-2 text-xs font-semibold tracking-[0.08em] text-[var(--color-text-tertiary)] uppercase">下一步建议</div>
+        <div class="space-y-3">
+          <div v-for="action in nextActionSummaries" :key="action.title" class="rounded-[12px] bg-[var(--color-surface-page)] px-3 py-3">
+            <div class="text-sm font-medium text-[var(--color-text-primary)]">{{ action.title }}</div>
+            <div class="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">{{ action.description }}</div>
+            <RouterLink :to="action.to" class="mt-2 inline-flex text-xs font-medium text-[var(--color-brand-600)] hover:underline">
+              {{ action.cta }}
+            </RouterLink>
+          </div>
+        </div>
       </section>
 
-      <div class="space-y-3">
-        <WorkspaceDisclosure title="Related Processing" :summary="processingSummary">
-          <RelatedProcessingPanel
-            :items="processingItems"
-            empty-text="当前任务尚未进入处理阶段。"
-          />
-        </WorkspaceDisclosure>
+      <section class="rounded-[16px] border border-[var(--color-border-soft)] bg-white px-4 py-4 shadow-[var(--shadow-card)]">
+        <div class="mb-2 text-xs font-semibold tracking-[0.08em] text-[var(--color-text-tertiary)] uppercase">处理摘要</div>
+        <div v-if="processingSummaries.length" class="space-y-3">
+          <div v-for="item in processingSummaries" :key="item.title" class="rounded-[12px] bg-[var(--color-surface-page)] px-3 py-3">
+            <div class="flex items-center justify-between gap-3">
+              <div class="text-sm font-medium text-[var(--color-text-primary)]">{{ item.title }}</div>
+              <span class="light2-badge" :class="badgeClass(item.status)">
+                <span class="light2-bdot" :style="{ background: badgeColor(item.status) }" />
+                {{ formatStatusLabel(item.status) }}
+              </span>
+            </div>
+            <div class="mt-1 text-xs text-[var(--color-text-secondary)]">{{ item.subtitle }}</div>
+            <div class="mt-1 text-xs text-[var(--color-text-tertiary)]">{{ item.caption }}</div>
+          </div>
+        </div>
+        <div v-else class="text-sm text-[var(--color-text-secondary)]">当前任务尚未进入处理阶段。</div>
+      </section>
 
-        <WorkspaceDisclosure title="Metadata" :summary="metadataSummary">
-          <WorkspaceMetadataGrid :items="metadataItems" />
-        </WorkspaceDisclosure>
-      </div>
+      <section class="rounded-[16px] border border-[var(--color-border-soft)] bg-white px-4 py-4 shadow-[var(--shadow-card)]">
+        <div class="mb-2 text-xs font-semibold tracking-[0.08em] text-[var(--color-text-tertiary)] uppercase">元数据</div>
+        <div class="space-y-3">
+          <div v-for="item in metadataItems" :key="item.label" class="rounded-[12px] bg-[var(--color-surface-page)] px-3 py-3">
+            <div class="text-xs text-[var(--color-text-tertiary)]">{{ item.label }}</div>
+            <div class="mt-1 text-sm font-medium text-[var(--color-text-primary)] break-all">{{ item.value }}</div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div v-else class="light2-page">
+    <div class="light2-tbl">
+      <div style="text-align: center; padding: 64px 0; color: var(--color-text-secondary)">正在加载任务详情...</div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { useRoute } from "vue-router";
+import { RouterLink, useRoute } from "vue-router";
 import { fetchAcquisitionDetail } from "@/api/platform";
-import BaseButton from "@/components/BaseButton.vue";
-import BusinessMetrics, { type MetricItem } from "@/components/BusinessMetrics.vue";
-import NextActionsPanel from "@/components/NextActionsPanel.vue";
-import PageCard from "@/components/PageCard.vue";
-import PageHeader from "@/components/PageHeader.vue";
-import RelatedProcessingPanel from "@/components/RelatedProcessingPanel.vue";
-import StatusBadge from "@/components/StatusBadge.vue";
-import WorkflowTimeline, { type WorkflowStageStatus } from "@/components/WorkflowTimeline.vue";
-import WorkspaceDisclosure from "@/components/WorkspaceDisclosure.vue";
-import WorkspaceHealthSummary from "@/components/WorkspaceHealthSummary.vue";
-import WorkspaceMetadataGrid from "@/components/WorkspaceMetadataGrid.vue";
-import WorkspaceOverviewBar from "@/components/WorkspaceOverviewBar.vue";
-import type { AcquisitionDetailViewModel, SessionRecord } from "@/types/platform";
-import { formatDateTime, formatStatusLabel } from "@/utils/format";
+import type { AcquisitionDetailViewModel } from "@/types/platform";
+import { formatDateTime, formatFileSize, formatStatusLabel } from "@/utils/format";
 
 const route = useRoute();
 const detail = ref<AcquisitionDetailViewModel | null>(null);
 
 const FAILURE_STATUSES = new Set(["FAILED", "ERROR", "QC_FAILED", "WARNING", "QC_WARNING"]);
-const PENDING_STATUSES = new Set(["PENDING", "WAITING", "RUNNING", "UPLOADING", "CREATED"]);
 const READY_STATUSES = new Set(["READY", "PASSED", "QC_PASSED", "SUCCESS", "PLAYABLE"]);
+
+const BADGE_MAP: Record<string, { cls: string; color: string }> = {
+  ACTIVE: { cls: "light2-badge-info", color: "var(--color-brand-500)" },
+  CREATED: { cls: "light2-badge-neutral", color: "#9298a3" },
+  COMPLETED: { cls: "light2-badge-ok", color: "#0d7d3e" },
+  ERROR: { cls: "light2-badge-err", color: "#c5222f" },
+  FAILED: { cls: "light2-badge-err", color: "#c5222f" },
+  QC_PASSED: { cls: "light2-badge-ok", color: "#0d7d3e" },
+  QC_WARNING: { cls: "light2-badge-warn", color: "#b87a0a" },
+  QC_FAILED: { cls: "light2-badge-err", color: "#c5222f" },
+  PENDING: { cls: "light2-badge-neutral", color: "#9298a3" },
+  RUNNING: { cls: "light2-badge-warn", color: "#b87a0a" },
+  UPLOADING: { cls: "light2-badge-info", color: "var(--color-brand-500)" },
+  UPLOADED: { cls: "light2-badge-ok", color: "#0d7d3e" },
+  SUCCESS: { cls: "light2-badge-ok", color: "#0d7d3e" },
+  READY: { cls: "light2-badge-ok", color: "#0d7d3e" },
+  PASSED: { cls: "light2-badge-ok", color: "#0d7d3e" },
+  WARNING: { cls: "light2-badge-warn", color: "#b87a0a" },
+};
 
 const sortedSessions = computed(() =>
   [...(detail.value?.sessions ?? [])].sort((left, right) =>
     latestTime(right.startedAt, right.createdAt).localeCompare(latestTime(left.startedAt, left.createdAt)),
   ),
 );
-
-const overviewItems = computed(() => {
-  const task = detail.value?.task;
-  return [
-    { label: "被试", value: task?.subjectCode },
-    { label: "动作", value: task?.actionName },
-    { label: "Profile", value: task?.profileName || "-" },
-    { label: "日期", value: task?.collectDate || "-" },
-  ];
-});
-
-const overviewSecondary = computed(() => {
-  const task = detail.value?.task;
-  if (!task) {
-    return "";
-  }
-  return `任务编号 ${task.taskCode || task.id} · 创建时间 ${formatDateTime(task.createdAt)} · 创建人 ${task.operatorName || "-"}`;
-});
 
 const abnormalSessions = computed(() =>
   sortedSessions.value.filter((session) =>
@@ -165,244 +199,111 @@ const abnormalSessions = computed(() =>
   ),
 );
 
-const pendingSessions = computed(() =>
-  sortedSessions.value.filter((session) =>
-    [session.qcStatus, session.exportStatus, session.processingStatus, session.uploadStatus].some((status) =>
-      PENDING_STATUSES.has(status),
-    ),
-  ),
-);
-
-const latestReportStatus = computed(() => detail.value?.reports?.[0]?.qcStatus || detail.value?.task.status || "PENDING");
 const readyExportCount = computed(() => sortedSessions.value.filter((session) => session.exportStatus === "READY").length);
 
-const compactHealthItems = computed<
-  Array<{
-    label: string;
-    value: string | number;
-    caption: string;
-    icon: string;
-    tone: "qc" | "export" | "process";
-  }>
->(() => {
-  const items: Array<{
-    label: string;
-    value: string | number;
-    caption: string;
-    icon: string;
-    tone: "qc" | "export" | "process";
-  }> = [
+const metricItems = computed(() => {
+  const assets = detail.value?.assets ?? [];
+  return [
     {
-      label: "最近 QC",
-      value: formatStatusLabel(latestReportStatus.value),
-      caption: "基于最近一次质检状态",
-      icon: "clipboard-check",
-      tone: "qc" as const,
+      label: "采集数",
+      value: sortedSessions.value.length,
+      caption: "当前任务下已识别的 Session 数量",
+      tone: "session",
     },
     {
-      label: "导出可用",
-      value: `${readyExportCount.value}/${sortedSessions.value.length || 0}`,
-      caption: readyExportCount.value ? "已有可导出采集" : "暂无 READY 采集",
-      icon: "download",
-      tone: "export" as const,
+      label: "资产数",
+      value: assets.length,
+      caption: "当前任务已登记的全部资产",
+      tone: "asset",
     },
-  ];
-
-  if (abnormalSessions.value.length > 0) {
-    items.unshift({
+    {
       label: "异常采集",
       value: abnormalSessions.value.length,
-      caption: "建议优先排查异常采集",
-      icon: "shield-alert",
-      tone: "qc" as const,
-    });
-  }
-
-  if (pendingSessions.value.length > 0) {
-    items.push({
-      label: "待处理采集",
-      value: pendingSessions.value.length,
-      caption: "仍有采集处于待处理阶段",
-      icon: "clock",
-      tone: "process" as const,
-    });
-  }
-
-  return items.slice(0, 4);
-});
-
-const taskStages = computed<
-  Array<{ label: string; caption: string; status: WorkflowStageStatus; tone?: "task" | "session" | "asset" | "process" | "qc" | "export" }>
->(() => {
-  const hasSessions = sortedSessions.value.length > 0;
-  const hasAssets = (detail.value?.assets.length ?? 0) > 0;
-  const hasJobs = (detail.value?.jobs.length ?? 0) > 0;
-  const runningJobs = detail.value?.jobs.some((job) => PENDING_STATUSES.has(job.status)) ?? false;
-  const hasReports = (detail.value?.reports.length ?? 0) > 0;
-  const hasRisk = abnormalSessions.value.length > 0;
-  const exportReady = readyExportCount.value > 0;
-
-  return [
-    { label: "任务已创建", caption: "工作容器已建立", status: "done" as const, tone: "task" as const },
-    {
-      label: "采集进入",
-      caption: hasSessions ? `${sortedSessions.value.length} 个采集` : "等待采集",
-      status: (hasSessions ? "done" : "current") as WorkflowStageStatus,
-      tone: "session" as const,
+      caption: abnormalSessions.value.length ? "建议优先排查异常会话" : "当前未发现异常会话",
+      tone: "qc",
     },
     {
-      label: "资产登记",
-      caption: hasAssets ? `${detail.value?.assets.length ?? 0} 个资产` : "等待资产进入",
-      status: (hasAssets ? "done" : hasSessions ? "current" : "waiting") as WorkflowStageStatus,
-      tone: "asset" as const,
-    },
-    {
-      label: "处理链路",
-      caption: hasJobs ? `${detail.value?.jobs.length ?? 0} 条记录` : "暂无处理",
-      status: (runningJobs ? "current" : hasJobs ? "done" : "waiting") as WorkflowStageStatus,
-      tone: "process" as const,
-    },
-    {
-      label: "质检",
-      caption: hasReports ? `${detail.value?.reports.length ?? 0} 条结果` : "等待质检",
-      status: (hasRisk ? "risk" : hasReports ? "done" : "waiting") as WorkflowStageStatus,
-      tone: "qc" as const,
-    },
-    {
-      label: "导出",
-      caption: exportReady ? `${readyExportCount.value} 个可导出` : "尚未就绪",
-      status: (exportReady ? "done" : hasRisk ? "risk" : "waiting") as WorkflowStageStatus,
-      tone: "export" as const,
+      label: "可导出采集",
+      value: readyExportCount.value,
+      caption: readyExportCount.value ? "已具备导出条件" : "暂无 READY 采集",
+      tone: "export",
     },
   ];
 });
 
-const metricItems = computed<MetricItem[]>(() => {
-  const assets = detail.value?.assets ?? [];
-  const lastUpdated = latestTimestamp([
-    detail.value?.task.createdAt,
-    ...sortedSessions.value.map((session) => latestTime(session.startedAt, session.createdAt)),
-    ...(detail.value?.jobs ?? []).map((job) => latestTime(job.updatedAt, job.createdAt)),
-    ...(detail.value?.reports ?? []).map((report) => report.createdAt),
-  ]);
+const nextActionSummaries = computed(() => {
+  if (!detail.value) {
+    return [];
+  }
 
-  return [
-    { label: "采集数", value: sortedSessions.value.length, caption: "当前任务下已识别的 Session 数量", icon: "camera", tone: "session" },
-    { label: "资产数", value: assets.length, caption: "当前任务已登记的全部资产", icon: "database", tone: "asset" },
-    { label: "最近更新时间", value: lastUpdated || "-", caption: "基于任务、采集、处理和质检时间推导", icon: "clock", tone: "task" },
+  const firstAbnormal = abnormalSessions.value[0];
+  const firstReady = sortedSessions.value.find((session) => READY_STATUSES.has(session.exportStatus));
+
+  if (!sortedSessions.value.length) {
+    return [
+      {
+        title: "先上传数据",
+        description: "当前任务还没有采集会话，建议先进入上传页接入普通文件或标准 Session 目录。",
+        cta: "去上传数据",
+        to: `/upload?taskId=${detail.value.task.id}`,
+      },
+      {
+        title: "查看任务采集入口",
+        description: "如果已经有外部采集计划，可以直接进入采集列表确认当前任务下是否已有会话。",
+        cta: "查看采集列表",
+        to: `/sessions?taskId=${detail.value.task.id}`,
+      },
+    ];
+  }
+
+  const actions = [
+    firstAbnormal
+      ? {
+          title: "优先处理异常采集",
+          description: "当前任务下存在状态异常的 Session，建议先进入对应采集详情排查质检、处理或导出问题。",
+          cta: "查看异常采集",
+          to: `/sessions/${firstAbnormal.sessionId}`,
+        }
+      : {
+          title: "继续查看采集",
+          description: "当前任务下已有采集会话，建议继续按采集维度核对资产、处理与质检进度。",
+          cta: "进入采集列表",
+          to: `/sessions?taskId=${detail.value.task.id}`,
+        },
+    firstReady
+      ? {
+          title: "查看可导出结果",
+          description: "已有会话满足导出条件，可以继续进入采集详情或导出页确认交付物。",
+          cta: "查看可导出采集",
+          to: `/sessions/${firstReady.sessionId}`,
+        }
+      : {
+          title: "补齐处理与质检",
+          description: "当前还没有 READY 会话，建议先确认处理记录和质检状态是否已经完成。",
+          cta: "查看处理模块",
+          to: "/processing",
+        },
   ];
+
+  return actions;
 });
 
-const processingItems = computed(() =>
+const processingSummaries = computed(() =>
   [...(detail.value?.jobs ?? [])]
     .sort((left, right) => latestTime(right.updatedAt, right.createdAt).localeCompare(latestTime(left.updatedAt, left.createdAt)))
     .slice(0, 3)
     .map((job) => ({
       title: job.pipelineId || `处理作业 #${job.id}`,
-      subtitle: `作业 #${job.id} · ${job.executorType || "PROCESSING"}`,
-      caption: `最近时间 ${formatDateTime(latestTime(job.updatedAt, job.createdAt))}${job.operatorName ? ` · 操作人 ${job.operatorName}` : ""}`,
+      subtitle: `${job.executorType || "PROCESSING"} 路 作业 #${job.id}`,
+      caption: `最近时间 ${formatDateTime(latestTime(job.updatedAt, job.createdAt))}${job.operatorName ? ` 路 操作人 ${job.operatorName}` : ""}`,
       status: job.status,
-      to: "/processing",
     })),
 );
-
-const processingSummary = computed(() => {
-  if (processingItems.value.length) {
-    const latest = processingItems.value[0];
-    return `${processingItems.value.length} 条处理记录 · 最近 ${latest.status ? formatStatusLabel(latest.status) : "已更新"}`;
-  }
-  return "当前任务尚未进入处理阶段";
-});
-
-const nextActions = computed(() => {
-  if (!detail.value) {
-    return [];
-  }
-  const actions: Array<{
-    label: string;
-    description: string;
-    to: string;
-    cta?: string;
-    primary?: boolean;
-    tone?: "task" | "session" | "process" | "qc" | "export" | "upload";
-  }> = [];
-
-  const firstAbnormal = abnormalSessions.value[0];
-  const firstPending = pendingSessions.value[0];
-  const firstPlayable = sortedSessions.value.find((session) => READY_STATUSES.has(session.exportStatus) || session.processingStatus === "PLAYABLE");
-
-  if (!sortedSessions.value.length) {
-    actions.push({
-      label: "上传数据",
-      description: "当前任务下还没有采集会话，先上传数据或发起采集是最合理的下一步。",
-      to: `/upload?taskId=${detail.value.task.id}`,
-      cta: "上传数据",
-      primary: true,
-      tone: "upload",
-    });
-  } else if (firstAbnormal) {
-    actions.push({
-      label: "查看异常采集",
-      description: "当前任务下存在异常 Session，建议优先进入异常采集排查质检或导出问题。",
-      to: `/sessions/${firstAbnormal.sessionId}`,
-      cta: "进入异常采集",
-      primary: true,
-      tone: "qc",
-    });
-  } else if (firstPending) {
-    actions.push({
-      label: "继续查看采集",
-      description: "仍有采集处于待处理阶段，进入该采集可以继续查看资产、质检和导出进度。",
-      to: `/sessions/${firstPending.sessionId}`,
-      cta: "继续查看",
-      primary: true,
-      tone: "session",
-    });
-  } else if (firstPlayable) {
-    actions.push({
-      label: "播放最近采集",
-      description: "当前已有可直接进入的采集结果，适合继续做回放和内容确认。",
-      to: `/play/${firstPlayable.sessionId}`,
-      cta: "播放采集",
-      primary: true,
-      tone: "session",
-    });
-  } else {
-    actions.push({
-      label: "查看全部采集",
-      description: "进入完整采集列表，继续确认每个 Session 的状态与产出。",
-      to: `/sessions?taskId=${detail.value.task.id}`,
-      cta: "查看采集",
-      primary: true,
-      tone: "task",
-    });
-  }
-
-  actions.push({
-    label: "查看采集列表",
-    description: "按采集工作台方式继续查看该任务下的全部会话。",
-    to: `/sessions?taskId=${detail.value.task.id}`,
-    cta: "查看采集",
-    tone: "task",
-  });
-
-  if (processingItems.value.length) {
-    actions.push({
-      label: "查看相关处理",
-      description: "已有处理作业记录，可继续进入处理模块追踪结果。",
-      to: "/processing",
-      cta: "查看处理",
-      tone: "process",
-    });
-  }
-
-  return actions.slice(0, 3);
-});
 
 const metadataItems = computed(() => {
   const task = detail.value?.task;
   return [
-    { label: "taskId", value: task?.id ?? "-" },
+    { label: "taskId", value: String(task?.id ?? "-") },
     { label: "taskCode", value: task?.taskCode || "-" },
     { label: "创建时间", value: formatDateTime(task?.createdAt) },
     { label: "创建人", value: task?.operatorName || "-" },
@@ -410,39 +311,24 @@ const metadataItems = computed(() => {
   ];
 });
 
-const metadataSummary = computed(() => {
-  const task = detail.value?.task;
-  return `任务编号 ${task?.taskCode || task?.id || "-"} · 创建时间 ${formatDateTime(task?.createdAt)}`;
-});
+function badgeClass(status: string) {
+  return BADGE_MAP[status]?.cls ?? "light2-badge-neutral";
+}
+
+function badgeColor(status: string) {
+  return BADGE_MAP[status]?.color ?? "#9298a3";
+}
+
+function metricColor(tone: string) {
+  if (tone === "session") return "#0d9444";
+  if (tone === "asset") return "#7c3aed";
+  if (tone === "qc") return "#c5222f";
+  if (tone === "export") return "#0d8ea0";
+  return "var(--color-brand-500)";
+}
 
 function latestTime(primary?: string | null, fallback?: string | null) {
   return primary || fallback || "";
-}
-
-function latestTimestamp(values: Array<string | undefined>) {
-  return values
-    .filter((value): value is string => Boolean(value))
-    .sort((left, right) => right.localeCompare(left))[0]
-    ? formatDateTime(
-        values
-          .filter((value): value is string => Boolean(value))
-          .sort((left, right) => right.localeCompare(left))[0],
-      )
-    : "";
-}
-
-function sessionUpdatedAt(session: SessionRecord) {
-  return formatDateTime(latestTime(session.startedAt, session.createdAt));
-}
-
-function sessionHealthLabel(session: SessionRecord) {
-  if ([session.qcStatus, session.exportStatus, session.processingStatus, session.uploadStatus].some((status) => FAILURE_STATUSES.has(status))) {
-    return "异常";
-  }
-  if ([session.qcStatus, session.exportStatus, session.processingStatus, session.uploadStatus].some((status) => PENDING_STATUSES.has(status))) {
-    return "待处理";
-  }
-  return "正常";
 }
 
 onMounted(async () => {

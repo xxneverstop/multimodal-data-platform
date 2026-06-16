@@ -132,6 +132,8 @@ public class AcquisitionTaskController {
                 sessionCount,
                 latestSession == null ? null : latestSession.getStartedAt(),
                 latestSession == null ? null : resolveLatestSessionStatus(latestSession),
+                latestSession == null ? null : latestSession.getSessionId(),
+                latestSession == null ? null : latestSession.getSessionCode(),
                 task.getCreatedAt(),
                 task.getUpdatedAt()
         );

@@ -10,6 +10,8 @@ public interface StorageService {
 
     InputStream download(String bucketName, String objectKey);
 
+    void copyObject(String sourceBucketName, String sourceObjectKey, String targetBucketName, String targetObjectKey);
+
     long getObjectSize(String bucketName, String objectKey);
 
     ObjectStat headObject(String bucketName, String objectKey);
