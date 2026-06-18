@@ -32,7 +32,8 @@
       </div>
 
       <div class="light2-actions">
-        <BaseButton :to="`/play/${detail.session.sessionId}`" variant="soft" tone="session">数据回放</BaseButton>
+        <a v-if="playbackReady" :href="`/play/${detail.session.sessionId}`" target="_blank" class="light2-btn light2-btn-primary" style="text-decoration:none">数据回放</a>
+        <BaseButton v-else variant="soft" tone="session" disabled title="当前数据不满足播放规则，请先执行处理任务">数据回放</BaseButton>
         <BaseButton :to="`/export?sessionId=${detail.session.sessionId}`" variant="secondary" tone="export">
           查看导出
         </BaseButton>
@@ -53,100 +54,96 @@
       <div class="light2-detail-main">
         <section class="light2-panel">
           <div class="light2-panel-hdr">
-            <span class="light2-panel-title">数据资产清单</span>
-            <span class="light2-panel-sub">{{ detail.assets.length }} 资产 · {{ detail.session.fileCount ?? 0 }} 文件</span>
+            <span class="light2-panel-title">原始资产</span>
+            <span class="light2-panel-sub">{{ rawAssets.length }} 资产</span>
           </div>
 
-          <div v-if="!detail.groups.length" class="light2-empty-state">
+          <div v-if="!rawAssets.length" class="light2-empty-state">
             当前采集下还没有可展示的资产组，建议先确认上传结果或继续采集流程。
           </div>
 
           <div v-else>
-            <section v-for="group in detail.groups" :key="group.key" class="light2-asset-group">
-              <div class="light2-asset-group-hdr">
-                <div class="light2-asset-group-icon">{{ groupGlyph(group) }}</div>
-                <div class="min-w-0">
-                  <div class="light2-asset-group-title">{{ group.title }}</div>
-                  <div class="light2-asset-group-sub">
-                    {{ group.assetCount }} 资产 · {{ group.fileCount }} 文件 · {{ formatFileSize(group.totalSize) }}
-                    <span v-if="groupHint(group)"> · {{ groupHint(group) }}</span>
-                  </div>
-                </div>
-                <div class="shrink-0">
-                  <StatusBadge :status="groupPrimaryStatus(group)" :label="groupStatusLabel(group)" />
+            <article v-for="asset in rawAssets" :key="asset.id" class="light2-asset-row">
+              <div class="light2-asset-row-icon">{{ assetGlyph(asset) }}</div>
+              <div class="light2-asset-row-info">
+                <div class="light2-asset-row-name">{{ asset.fileName || asset.assetName }}</div>
+                <div class="light2-asset-row-meta">
+                  <span>{{ asset.fileFormat || "-" }}</span>
+                  <span>{{ asset.assetType || "-" }}</span>
+                  <span>{{ formatFileSize(asset.fileSize) }}</span>
                 </div>
               </div>
+              <div class="light2-asset-row-actions">
+                <BaseButton :to="`/data/${asset.id}?taskId=${detail.task?.id ?? detail.session.taskId}`" variant="ghost" tone="asset" size="sm">详情</BaseButton>
+              </div>
+            </article>
+          </div>
+        </section>
 
-              <article
-                v-for="asset in visibleAssets(group)"
-                :key="asset.id"
-                class="light2-asset-row"
-              >
-                <div class="light2-asset-row-icon">{{ assetGlyph(asset) }}</div>
-                <div class="light2-asset-row-info">
-                  <div class="light2-asset-row-name">{{ asset.fileName || asset.assetName }}</div>
-                  <div class="light2-asset-row-meta">
-                    <span>{{ asset.fileFormat || "-" }}</span>
-                    <span>{{ asset.assetType || "-" }}</span>
-                    <span>{{ formatDateTime(asset.uploadedAt) }}</span>
-                  </div>
-                </div>
-                <div class="light2-asset-row-size">{{ formatFileSize(asset.fileSize) }}</div>
-                <div class="light2-asset-row-actions">
-                  <a
-                    v-if="showDownload(asset)"
-                    :href="asset.rawAsset.storageUrl || undefined"
-                    target="_blank"
-                    rel="noreferrer"
-                    class="light2-btn light2-btn-sec light2-btn-sm"
-                  >
-                    下载
-                  </a>
-                  <BaseButton
-                    v-if="isPlayableAsset(asset)"
-                    :to="`/play/${detail.session.sessionId}`"
-                    variant="secondary"
-                    tone="session"
-                    size="sm"
-                  >
-                    播放
-                  </BaseButton>
-                  <BaseButton
-                    :to="`/data/${asset.id}?taskId=${detail.task?.id ?? detail.session.taskId}`"
-                    variant="ghost"
-                    tone="asset"
-                    size="sm"
-                  >
-                    详情
-                  </BaseButton>
-                </div>
-              </article>
+        <!-- 处理产物 -->
+        <section class="light2-panel" v-for="pg in processedGroups" :key="'pg-'+pg.jobId">
+          <div class="light2-panel-hdr">
+            <span class="light2-panel-title">处理产物 · Job #{{ pg.jobId }} · {{ pg.pipelineId }}</span>
+            <span class="light2-panel-sub">
+              <span class="light2-badge" :class="pg.status==='SUCCESS'?'light2-badge-ok':pg.status==='FAILED'?'light2-badge-err':'light2-badge-warn'"><span class="light2-bdot" :style="{background:pg.status==='SUCCESS'?'#0d9444':pg.status==='FAILED'?'#d92d20':'#b87a0a'}"/>{{ pg.status }}</span>
+              {{ pg.assets.length }} 个产物
+            </span>
+          </div>
+          <article v-for="asset in pg.assets" :key="asset.id" class="light2-asset-row">
+            <div class="light2-asset-row-icon">{{ assetGlyph(asset) }}</div>
+            <div class="light2-asset-row-info">
+              <div class="light2-asset-row-name">{{ asset.fileName || asset.assetName }}</div>
+              <div class="light2-asset-row-meta">
+                <span>{{ asset.fileFormat || "-" }}</span>
+                <span>{{ asset.assetType || "-" }}</span>
+                <span>{{ formatFileSize(asset.fileSize) }}</span>
+              </div>
+            </div>
+            <div class="light2-asset-row-actions">
+              <a v-if="showDownload(asset)" :href="asset.rawAsset.storageUrl||undefined" target="_blank" rel="noreferrer" class="light2-btn light2-btn-sec light2-btn-sm">下载</a>
+              <BaseButton :to="`/data/${asset.id}?taskId=${detail.task?.id??detail.session.taskId}`" variant="ghost" tone="asset" size="sm">详情</BaseButton>
+            </div>
+          </article>
+        </section>
 
-              <div v-if="group.assets.length > assetPreviewLimit && !isGroupExpanded(group.key)" class="light2-group-more">
-                <button type="button" class="light2-btn light2-btn-sec light2-btn-sm" @click="expandGroup(group.key)">
-                  展开更多 ({{ group.assets.length - assetPreviewLimit }})
+        <section class="light2-panel">
+          <div class="light2-panel-hdr">
+            <span class="light2-panel-title">可用处理</span>
+            <span class="light2-panel-sub">{{ availablePipelines.length }} 个可用规则</span>
+          </div>
+          <div v-if="!availablePipelines.length" class="light2-empty-state">该 Profile 下暂无可用处理规则，请先在「处理」页面创建规则并关联 Profile。</div>
+          <div v-else class="light2-job-list">
+            <article v-for="p in availablePipelines" :key="p.pipelineId" class="light2-job-row">
+              <div class="light2-job-code">{{ p.pipelineId }}</div>
+              <div class="light2-job-name">{{ p.displayName }}</div>
+              <div class="light2-job-time" style="color:var(--color-text-tertiary);font-size:12px">{{ p.executorType }}</div>
+              <div class="light2-job-duration"></div>
+              <div class="light2-job-status">
+                <button class="light2-btn light2-btn-primary light2-btn-sm" @click="executePipeline(p)" :disabled="executingPipelineId === p.pipelineId">
+                  {{ executingPipelineId === p.pipelineId ? '创建中...' : '执行' }}
                 </button>
               </div>
-            </section>
+            </article>
           </div>
+          <p v-if="executeError" style="color:#d92d20;font-size:12px;margin-top:8px">{{ executeError }}</p>
         </section>
 
         <section class="light2-panel">
           <div class="light2-panel-hdr">
             <span class="light2-panel-title">关联处理作业</span>
-            <span class="light2-panel-sub">{{ detail.jobs.length }} 个作业</span>
+            <span class="light2-panel-sub">{{ sessionJobs.length }} 个作业</span>
           </div>
 
-          <div v-if="!detail.jobs.length" class="light2-empty-state">
+          <div v-if="!sessionJobs.length" class="light2-empty-state">
             当前采集尚未进入处理阶段。
           </div>
 
           <div v-else class="light2-job-list">
-            <article v-for="job in sortedJobs" :key="job.id" class="light2-job-row">
+            <article v-for="job in sessionJobs" :key="job.id" class="light2-job-row">
               <div class="light2-job-code">{{ job.pipelineId || `JOB-${job.id}` }}</div>
               <div class="light2-job-name">{{ job.executorType || `处理作业 #${job.id}` }}</div>
               <div class="light2-job-time">{{ formatDateTime(latestTime(job.updatedAt, job.createdAt)) }}</div>
-              <div class="light2-job-duration">{{ job.duration || durationLabel(job.durationMs) || "-" }}</div>
+              <div class="light2-job-duration">{{ job.duration || '-' }}</div>
               <div class="light2-job-status">
                 <StatusBadge :status="job.status" />
               </div>
@@ -203,7 +200,7 @@
         <section class="light2-info-card">
           <div class="light2-info-card-hdr">快捷操作</div>
           <div class="light2-quick-actions">
-            <BaseButton :to="`/play/${detail.session.sessionId}`" variant="soft" tone="session" block>数据回放</BaseButton>
+            <BaseButton :to="playbackReady ? `/play/${detail.session.sessionId}` : undefined" variant="soft" tone="session" block :disabled="!playbackReady" :title="playbackReady ? '' : '当前数据不满足播放规则'">数据回放</BaseButton>
             <BaseButton :to="`/export?sessionId=${detail.session.sessionId}`" variant="secondary" tone="export" block>
               导出数据
             </BaseButton>
@@ -225,15 +222,54 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { fetchSessionDetail } from "@/api/platform";
+import { fetchAvailablePipelines } from "@/api/pipelines";
+import { createSessionJob, fetchSessionJobs } from "@/api/processing";
+import { checkSessionPlayback } from "@/api/sessions";
 import BaseButton from "@/components/BaseButton.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 import type { AssetListItem, SessionDataGroup, SessionDetailViewModel } from "@/types/platform";
+import type { PipelineDefinitionResponse } from "@/types/pipeline";
+import type { ProcessingJobResponse } from "@/types/processing";
 import { formatDateTime, formatFileSize, formatStatusLabel } from "@/utils/format";
 
 const route = useRoute();
 const detail = ref<SessionDetailViewModel | null>(null);
 const expandedGroupKeys = ref<string[]>([]);
 const assetPreviewLimit = 8;
+
+// --- 可用处理 ---
+const availablePipelines = ref<PipelineDefinitionResponse[]>([]);
+const sessionJobs = ref<ProcessingJobResponse[]>([]);
+const executingPipelineId = ref<string | null>(null);
+const playbackReady = ref(false);            // Session 级别：原始+全部产物是否满足播放规则
+const executeError = ref("");
+
+async function loadProcessingData(sessionId: number) {
+  try { availablePipelines.value = await fetchAvailablePipelines(sessionId); } catch { availablePipelines.value = []; }
+  try { sessionJobs.value = await fetchSessionJobs(sessionId); } catch { sessionJobs.value = []; }
+  const sid = detail.value?.session?.sessionId;
+  if (sid) {
+    try { playbackReady.value = await checkSessionPlayback(sid); } catch { playbackReady.value = false; }
+  }
+}
+
+async function executePipeline(p: PipelineDefinitionResponse) {
+  const sid = detail.value?.session?.sessionId;
+  if (!sid) return;
+  executingPipelineId.value = p.pipelineId;
+  executeError.value = "";
+  try {
+    // sessionId 是数据库主键 id，从路由参数或 detail 中获取
+    // 注意: detail.session.sessionId 是 session 的业务标识（如 fake_session_001_final），不是数据库主键
+    // 需要通过 detail.session.id 获取主键
+    await createSessionJob(detail.value!.session.id!, { pipelineId: p.pipelineId });
+    await loadProcessingData(detail.value!.session.id!);
+  } catch (e: any) {
+    executeError.value = e?.message || "创建处理任务失败";
+  } finally {
+    executingPipelineId.value = null;
+  }
+}
 
 const FAILURE_STATUSES = new Set(["FAILED", "ERROR", "QC_FAILED", "WARNING", "QC_WARNING"]);
 const PENDING_STATUSES = new Set(["PENDING", "WAITING", "RUNNING", "UPLOADING", "CREATED"]);
@@ -244,6 +280,36 @@ const sortedJobs = computed(() =>
     latestTime(right.updatedAt, right.createdAt).localeCompare(latestTime(left.updatedAt, left.createdAt)),
   ),
 );
+
+// 原始资产（非处理产物）
+const rawAssets = computed(() =>
+  (detail.value?.assets ?? []).filter(a => !a.rawAsset?.producedByJobId)
+);
+
+// 处理产物按 Job 分组
+const processedGroups = computed(() => {
+  const all = detail.value?.assets ?? [];
+  const jobs = detail.value?.jobs ?? [];
+  const jobMap = new Map<number, ProcessingJobResponse>();
+  for (const j of jobs) jobMap.set(j.id, j);
+
+  const grouped = new Map<number, AssetListItem[]>();
+  for (const a of all) {
+    const jobId = a.rawAsset?.producedByJobId;
+    if (jobId == null) continue;
+    if (!grouped.has(jobId)) grouped.set(jobId, []);
+    grouped.get(jobId)!.push(a);
+  }
+  return Array.from(grouped.entries()).map(([jobId, assets]) => {
+    const job = jobMap.get(jobId);
+    return {
+      jobId,
+      pipelineId: job?.pipelineId ?? `JOB-${jobId}`,
+      status: job?.status ?? 'UNKNOWN',
+      assets,
+    };
+  });
+});
 
 const sessionPrimaryStatus = computed(() => {
   if (!detail.value) {
@@ -546,6 +612,9 @@ function visibleAssets(group: SessionDataGroup) {
 async function loadDetail() {
   detail.value = await fetchSessionDetail(String(route.params.sessionId));
   expandedGroupKeys.value = [];
+  if (detail.value?.session?.id) {
+    loadProcessingData(detail.value.session.id);
+  }
 }
 
 watch(

@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@RestController
+@RestController("availablePipelineController")
 @RequestMapping("/api/tasks/{taskId}/available-pipelines")
 public class PipelineController {
 

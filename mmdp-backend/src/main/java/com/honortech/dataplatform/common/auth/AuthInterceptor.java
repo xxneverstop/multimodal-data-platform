@@ -24,6 +24,9 @@ public class AuthInterceptor implements HandlerInterceptor {
         if (requestUri.startsWith("/api/auth/")) {
             return true;
         }
+        if (requestUri.startsWith("/api/worker/")) {
+            return true;
+        }
 
         HttpSession session = request.getSession(false);
         AuthSessionUser currentUser = session == null ? null : AuthSessionUtils.getCurrentUser(session);

@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -73,7 +74,16 @@ public class CollectionSessionController {
     }
 
     @GetMapping("/api/sessions/{sessionId}/playback")
-    public ApiResponse<SessionPlaybackResponse> getPlaybackData(@PathVariable String sessionId) {
-        return ApiResponse.success(sessionService.getPlaybackData(sessionId));
+    public ApiResponse<SessionPlaybackResponse> getPlaybackData(
+            @PathVariable String sessionId,
+            @RequestParam(required = false) Long jobId) {
+        return ApiResponse.success(sessionService.getPlaybackData(sessionId, jobId));
+    }
+
+    @GetMapping("/api/sessions/{sessionId}/playback/check")
+    public ApiResponse<Boolean> checkPlayback(
+            @PathVariable String sessionId,
+            @RequestParam(required = false) Long jobId) {
+        return ApiResponse.success(sessionService.canPlay(sessionId, jobId));
     }
 }

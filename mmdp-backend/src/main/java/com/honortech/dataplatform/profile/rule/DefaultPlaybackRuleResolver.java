@@ -31,9 +31,13 @@ public class DefaultPlaybackRuleResolver implements PlaybackRuleResolver {
         for (CollectionProfileSource profileSource : profileSources) {
             JsonNode sourceInfo = sourceNode == null ? null : sourceNode.get(profileSource.getSourceKey());
             String type = sourceInfo != null && sourceInfo.has("type") ? sourceInfo.get("type").asText() : profileSource.getSourceType();
-            Double fps = sourceInfo != null && sourceInfo.has("fps") ? sourceInfo.get("fps").asDouble() : profileSource.getExpectedFps();
+            Double fps = null;
+            if (sourceInfo != null && sourceInfo.has("fps")) { fps = sourceInfo.get("fps").asDouble(); }
+            if (fps == null) { fps = profileSource.getExpectedFps(); }
             Integer sampleCount = sourceInfo != null && sourceInfo.has("sampleCount") ? sourceInfo.get("sampleCount").asInt() : null;
-            Double sampleRate = sourceInfo != null && sourceInfo.has("sampleRate") ? sourceInfo.get("sampleRate").asDouble() : profileSource.getExpectedSampleRate();
+            Double sampleRate = null;
+            if (sourceInfo != null && sourceInfo.has("sampleRate")) { sampleRate = sourceInfo.get("sampleRate").asDouble(); }
+            if (sampleRate == null) { sampleRate = profileSource.getExpectedSampleRate(); }
             String videoUrl = null;
             String jsonlUrl = null;
             for (DataFile dataFile : sessionFiles) {
@@ -47,8 +51,21 @@ public class DefaultPlaybackRuleResolver implements PlaybackRuleResolver {
                     jsonlUrl = "/api/files/" + dataFile.getId() + "/download";
                 }
             }
+            // 根据实际可用的媒体文件修正播放类型
+            String resolvedType = type;
+            if (videoUrl != null) {
+                resolvedType = "video";
+            } else if (jsonlUrl != null) {
+                resolvedType = "imu";
+            } else if (profileSource.getPlaybackKind() != null && !profileSource.getPlaybackKind().isBlank()) {
+                // 无产物文件，但 Profile 标记了该 source 的播放方式（如 IMU 曲线）
+                resolvedType = profileSource.getPlaybackKind();
+            } else {
+                // 无法播放的 source，跳过
+                continue;
+            }
             result.put(profileSource.getSourceKey(), new SessionPlaybackResponse.PlaybackSource(
-                    type,
+                    resolvedType,
                     profileSource.getSourceName(),
                     videoUrl,
                     fps,
@@ -58,5 +75,21 @@ public class DefaultPlaybackRuleResolver implements PlaybackRuleResolver {
             ));
         }
         return result;
+    }
+
+    @Override
+    public boolean canPlay(List<CollectionProfileSource> profileSources, List<DataFile> sessionFiles) {
+        for (CollectionProfileSource ps : profileSources) {
+            String pk = ps.getPlaybackKind();
+            if (pk == null || pk.isBlank()) continue;
+            for (DataFile f : sessionFiles) {
+                if (f.getSourceKey() == null) continue;
+                if (!f.getSourceKey().equalsIgnoreCase(ps.getSourceKey())) continue;
+                String name = (f.getOriginalFilename() == null) ? "" : f.getOriginalFilename().toLowerCase(Locale.ROOT);
+                if ("video".equals(pk) && name.endsWith(".mp4")) return true;
+                if (("imu".equals(pk) || "imu_curve".equals(pk)) && (name.endsWith(".csv") || name.endsWith(".jsonl"))) return true;
+            }
+        }
+        return false;
     }
 }

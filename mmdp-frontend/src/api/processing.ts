@@ -3,6 +3,7 @@ import type {
   AvailablePipelineResponse,
   CreateManualProcessingJobRequest,
   CreateProcessingJobRequest,
+  CreateSessionJobRequest,
   ManualProcessingJobResponse,
   ProcessingJobResponse,
   TaskLineageResponse
@@ -30,4 +31,14 @@ export async function createManualProcessingJob(taskId: number, payload: CreateM
 
 export async function fetchTaskLineage(taskId: number): Promise<TaskLineageResponse> {
   return http.get(`/api/tasks/${taskId}/lineage`);
+}
+
+/** 对 Session 创建处理任务 */
+export async function createSessionJob(sessionId: number, payload: CreateSessionJobRequest): Promise<ProcessingJobResponse> {
+  return http.post(`/api/sessions/${sessionId}/processing-jobs`, payload);
+}
+
+/** 列出 Session 关联的处理任务 */
+export async function fetchSessionJobs(sessionId: number): Promise<ProcessingJobResponse[]> {
+  return http.get(`/api/sessions/${sessionId}/processing-jobs`);
 }

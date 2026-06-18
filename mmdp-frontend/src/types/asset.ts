@@ -8,6 +8,12 @@ export type AssetType =
   | "ALIGNED_RESULT"
   | "CAMERA_PARAM"
   | "SESSION_ARCHIVE_ZIP"
+  | "LEFT_IMAGE_SEQUENCE"
+  | "RIGHT_IMAGE_SEQUENCE"
+  | "RAW_IMU_CSV"
+  | "FRAME_TIMESTAMPS_CSV"
+  | "DEPTH_RAW"
+  | "POSE_CACHE"
   | "OTHER";
 
 export interface DataAssetResponse {

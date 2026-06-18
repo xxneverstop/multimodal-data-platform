@@ -129,8 +129,17 @@ export function fetchSessionDetail(sessionId: string): Promise<SessionResponse> 
   return http.get(`/api/sessions/${encodeURIComponent(sessionId)}`) as any;
 }
 
-export function fetchSessionPlayback(sessionId: string): Promise<SessionPlaybackResponse> {
-  return http.get(`/api/sessions/${encodeURIComponent(sessionId)}/playback`) as any;
+export function fetchSessionPlayback(sessionId: string, jobId?: number): Promise<SessionPlaybackResponse> {
+  const params: Record<string, any> = {};
+  if (jobId != null) params.jobId = jobId;
+  return http.get(`/api/sessions/${encodeURIComponent(sessionId)}/playback`, { params }) as any;
+}
+
+/** 检查 Session 是否满足播放规则 */
+export function checkSessionPlayback(sessionId: string, jobId?: number): Promise<boolean> {
+  const params: Record<string, any> = {};
+  if (jobId != null) params.jobId = jobId;
+  return http.get(`/api/sessions/${encodeURIComponent(sessionId)}/playback/check`, { params }) as any;
 }
 
 export function importSessionPackage(formData: FormData): Promise<SessionImportResponse> {

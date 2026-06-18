@@ -1144,7 +1144,7 @@ const assetSubTabs: { key: AssetSubTabKey; label: string }[] = [
 ];
 
 const requiredAssetTypes: AssetType[] = ["MOCAP_CSV", "SMPL_RESULT"];
-const assetTypeOptions: AssetType[] = ["RGB_SEQ_RAW", "RGB_VIDEO_MP4", "MOCAP_CSV", "SMPL_RESULT", "ALIGNED_RESULT", "CAMERA_PARAM", "OTHER"];
+const assetTypeOptions: AssetType[] = ["RGB_SEQ_RAW", "RGB_VIDEO_MP4", "MOCAP_CSV", "SMPL_RESULT", "ALIGNED_RESULT", "CAMERA_PARAM", "LEFT_IMAGE_SEQUENCE", "RIGHT_IMAGE_SEQUENCE", "RAW_IMU_CSV", "FRAME_TIMESTAMPS_CSV", "DEPTH_RAW", "POSE_CACHE", "OTHER"];
 const outputAssetTypeOptions: AssetType[] = ["ALIGNED_RESULT", "SMPL_RESULT", "RGB_VIDEO_MP4", "MOCAP_CSV", "OTHER"];
 
 const activeMainTab = ref<MainTabKey>("overview");

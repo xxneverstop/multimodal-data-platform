@@ -20,4 +20,8 @@ public interface CollectionSessionService {
     CollectionSession getBySessionId(String sessionId);
 
     SessionPlaybackResponse getPlaybackData(String sessionId);
+
+    SessionPlaybackResponse getPlaybackData(String sessionId, Long jobId);
+
+    boolean canPlay(String sessionId, Long jobId);
 }

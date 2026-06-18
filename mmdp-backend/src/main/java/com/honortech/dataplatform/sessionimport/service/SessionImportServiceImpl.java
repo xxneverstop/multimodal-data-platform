@@ -280,25 +280,34 @@ public class SessionImportServiceImpl implements SessionImportService {
             Iterator<String> fieldNames = sourcesNode.fieldNames();
             while (fieldNames.hasNext()) {
                 String sourceKey = fieldNames.next();
-                UploadedObjectRef file = archivedByPath.get(normalizeEntryPath(requiredSourcePath(sourceKey, sourcesNode.get(sourceKey))));
+                String sourcePath = normalizeEntryPath(requiredSourcePath(sourceKey, sourcesNode.get(sourceKey)));
                 CollectionProfileSource profileSource = sourceByKey.get(sourceKey.toLowerCase(Locale.ROOT));
-                DataFile dataFile = createImportedDataFile(
-                        task.getId(),
-                        session.getId(),
-                        "EXTRACTED_STRUCTURED",
-                        sourceKey,
-                        file,
-                        AssetType.fromNullable(profileSource.getParsedAssetType())
-                );
-                dataAssetService.createAcquisitionAsset(
-                        task.getId(),
-                        session.getId(),
-                        sourceKey,
-                        dataFile,
-                        AssetType.fromNullable(profileSource.getParsedAssetType())
-                );
-                createdFileCount += 1;
-                createdAssetCount += 1;
+                List<UploadedObjectRef> sourceFiles = resolveSourceFiles(sourcePath, archivedByPath);
+                DataFile firstFile = null;
+                for (UploadedObjectRef file : sourceFiles) {
+                    DataFile dataFile = createImportedDataFile(
+                            task.getId(),
+                            session.getId(),
+                            "EXTRACTED_STRUCTURED",
+                            sourceKey,
+                            file,
+                            AssetType.fromNullable(profileSource.getParsedAssetType())
+                    );
+                    if (firstFile == null) {
+                        firstFile = dataFile;
+                    }
+                    createdFileCount += 1;
+                }
+                if (firstFile != null) {
+                    dataAssetService.createAcquisitionAsset(
+                            task.getId(),
+                            session.getId(),
+                            sourceKey,
+                            firstFile,
+                            AssetType.fromNullable(profileSource.getParsedAssetType())
+                    );
+                    createdAssetCount += 1;
+                }
             }
 
             for (String artifactPath : collectArtifactPaths(manifest.artifacts())) {
@@ -801,7 +810,7 @@ public class SessionImportServiceImpl implements SessionImportService {
             }
             String path = normalizeEntryPath(requiredSourcePath(sourceKey, sourcesNode.get(sourceKey)));
             validateSourcePathNamespace(sourceKey, path);
-            if (!uploadedByPath.containsKey(path)) {
+            if (!uploadedByPath.containsKey(path) && !isDirectorySource(path, uploadedByPath)) {
                 throw new BizException("Manifest source path does not exist in uploaded files: " + path);
             }
         }
@@ -926,7 +935,15 @@ public class SessionImportServiceImpl implements SessionImportService {
         while (fieldNames.hasNext()) {
             String sourceKey = fieldNames.next();
             String sourcePath = normalizeEntryPath(requiredSourcePath(sourceKey, sourcesNode.get(sourceKey)));
-            archiveImportedObject(archivedByPath, uploadedByPath.get(sourcePath), taskCode, sessionCode);
+            UploadedObjectRef sourceFile = uploadedByPath.get(sourcePath);
+            if (sourceFile != null) {
+                archiveImportedObject(archivedByPath, sourceFile, taskCode, sessionCode);
+            } else {
+                // 目录 source：归档目录下所有文件
+                for (UploadedObjectRef dirFile : collectDirectoryFiles(sourcePath, uploadedByPath)) {
+                    archiveImportedObject(archivedByPath, dirFile, taskCode, sessionCode);
+                }
+            }
         }
 
         for (String artifactPath : collectArtifactPaths(manifest.artifacts())) {
@@ -1137,5 +1154,35 @@ public class SessionImportServiceImpl implements SessionImportService {
             Long fileSize,
             String sha256
     ) {
+    }
+
+    /**
+     * 检查 manifest 中 source path 是否指向一个目录（即有文件以该路径为前缀）
+     */
+    private boolean isDirectorySource(String path, Map<String, UploadedObjectRef> uploadedByPath) {
+        String prefix = path.endsWith("/") ? path : path + "/";
+        return uploadedByPath.keySet().stream().anyMatch(k -> k.startsWith(prefix));
+    }
+
+    /**
+     * 收集目录 source 下的所有文件
+     */
+    private List<UploadedObjectRef> collectDirectoryFiles(String dirPath, Map<String, UploadedObjectRef> uploadedByPath) {
+        String prefix = dirPath.endsWith("/") ? dirPath : dirPath + "/";
+        return uploadedByPath.entrySet().stream()
+                .filter(e -> e.getKey().startsWith(prefix))
+                .map(Map.Entry::getValue)
+                .toList();
+    }
+
+    /**
+     * 解析 source path 对应的文件列表：单文件返回 [file]，目录返回目录下所有文件
+     */
+    private List<UploadedObjectRef> resolveSourceFiles(String path, Map<String, UploadedObjectRef> archivedByPath) {
+        UploadedObjectRef exact = archivedByPath.get(path);
+        if (exact != null) {
+            return List.of(exact);
+        }
+        return collectDirectoryFiles(path, archivedByPath);
     }
 }

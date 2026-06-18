@@ -12,6 +12,12 @@ public enum AssetType {
     SMPL_RESULT,
     ALIGNED_RESULT,
     CAMERA_PARAM,
+    LEFT_IMAGE_SEQUENCE,
+    RIGHT_IMAGE_SEQUENCE,
+    RAW_IMU_CSV,
+    FRAME_TIMESTAMPS_CSV,
+    DEPTH_RAW,
+    POSE_CACHE,
     OTHER;
 
     public static AssetType fromNullable(String value) {

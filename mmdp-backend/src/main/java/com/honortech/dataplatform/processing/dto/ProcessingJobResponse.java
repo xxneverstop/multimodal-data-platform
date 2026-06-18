@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 public record ProcessingJobResponse(
         Long id,
         Long taskId,
+        Long sessionId,
         String pipelineId,
         String executorType,
         String status,

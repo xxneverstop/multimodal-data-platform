@@ -3,6 +3,7 @@ package com.honortech.dataplatform.processing.controller;
 import com.honortech.dataplatform.common.api.ApiResponse;
 import com.honortech.dataplatform.processing.dto.CreateManualProcessingJobRequest;
 import com.honortech.dataplatform.processing.dto.CreateProcessingJobRequest;
+import com.honortech.dataplatform.processing.dto.CreateSessionJobRequest;
 import com.honortech.dataplatform.processing.dto.ManualProcessingJobResponse;
 import com.honortech.dataplatform.processing.dto.ProcessingJobResponse;
 import com.honortech.dataplatform.processing.dto.TaskLineageResponse;
@@ -58,5 +59,18 @@ public class ProcessingJobController {
     @GetMapping("/api/processing-jobs/{jobId}")
     public ApiResponse<ProcessingJobResponse> getJob(@PathVariable Long jobId) {
         return ApiResponse.success(processingJobService.getJob(jobId));
+    }
+
+    @PostMapping("/api/sessions/{sessionId}/processing-jobs")
+    public ApiResponse<ProcessingJobResponse> createSessionJob(
+            @PathVariable Long sessionId,
+            @Valid @RequestBody CreateSessionJobRequest request) {
+        return ApiResponse.success("Processing job created",
+                processingJobService.createSessionJob(sessionId, request));
+    }
+
+    @GetMapping("/api/sessions/{sessionId}/processing-jobs")
+    public ApiResponse<List<ProcessingJobResponse>> listSessionJobs(@PathVariable Long sessionId) {
+        return ApiResponse.success(processingJobService.listJobsBySessionId(sessionId));
     }
 }

@@ -122,6 +122,12 @@ const router = createRouter({
           meta: { title: "用户管理", requiresAdmin: true },
         },
         {
+          path: "management/profiles",
+          name: "management-profiles",
+          component: () => import("@/views/management/ProfileManagementView.vue"),
+          meta: { title: "Profile 管理", requiresAdmin: true },
+        },
+        {
           path: "management/:module",
           name: "management-module",
           component: () => import("@/views/management/ManagementModuleView.vue"),

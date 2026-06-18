@@ -155,7 +155,61 @@
                     <th style="text-align:right">操作</th>
                   </tr>
                 </thead>
-                <tbody>
+
+                <!-- 折叠模式：按目录分组 -->
+                <tbody v-if="isCollapsed && groupedEntries">
+                  <template v-for="group in groupedEntries" :key="group.folder">
+                    <!-- 分组摘要行 -->
+                    <tr class="group-summary-row" @click="toggleGroup(group.folder)">
+                      <td colspan="5" style="padding:8px 14px">
+                        <div style="display:flex;align-items:center;justify-content:space-between">
+                          <div style="display:flex;align-items:center;gap:10px">
+                            <span style="transition:transform 0.15s" :style="{ transform: expandedGroups.has(group.folder) ? 'rotate(90deg)' : '' }">▸</span>
+                            <span style="font-size:18px">📁</span>
+                            <span style="font-weight:600;font-size:13px;color:var(--color-text-primary)">{{ group.folder }}/</span>
+                            <span class="light2-badge light2-badge-neutral">{{ group.count }} 个文件</span>
+                          </div>
+                          <span style="font-size:12px;color:var(--color-text-secondary)">{{ formatSize(group.totalSize) }}</span>
+                        </div>
+                      </td>
+                    </tr>
+                    <!-- 展开的文件明细行 -->
+                    <template v-if="expandedGroups.has(group.folder)">
+                      <tr v-for="item in pendingAssetItems.filter(p => group.files.some(f => f.key === p.key))" :key="item.key">
+                        <td>
+                          <div style="max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" :title="item.name">{{ item.name }}</div>
+                          <div v-if="item.secondaryText" style="font-size:11px;color:var(--color-text-tertiary);margin-top:2px">{{ item.secondaryText }}</div>
+                        </td>
+                        <td style="color:var(--color-text-secondary)">{{ item.ingestModeLabel }}</td>
+                        <td>
+                          <div style="min-width:180px">
+                            <div style="display:flex;align-items:center;gap:8px">
+                              <span class="light2-badge" :class="{ 'light2-badge-ok': item.stateLabel === '完成', 'light2-badge-warn': item.stateLabel === '上传中', 'light2-badge-info': item.stateLabel === '已上传' || item.stateLabel === '收口中', 'light2-badge-err': item.stateLabel.includes('失败'), 'light2-badge-neutral': item.stateLabel === '等待上传' || item.stateLabel === '仅预览' }">
+                                <span class="light2-bdot" :style="{ background: item.stateLabel === '完成' ? '#0d7d3e' : item.stateLabel === '上传中' ? '#b87a0a' : item.stateLabel.includes('失败') ? '#c5222f' : item.stateLabel === '等待上传' || item.stateLabel === '仅预览' ? '#9298a3' : 'var(--color-brand-500)' }" />
+                                {{ item.stateLabel }}
+                              </span>
+                              <span v-if="item.showPercent" style="font-size:12px;font-weight:500;color:var(--color-text-secondary)">{{ item.progress }}%</span>
+                            </div>
+                            <div v-if="item.showProgressBar" style="margin-top:8px">
+                              <div class="progress-track">
+                                <div class="progress-fill" :class="item.progress >= 100 ? 'progress-fill-done' : 'progress-fill-active'" :style="{ width: `${item.progress}%` }" />
+                              </div>
+                              <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:4px">{{ item.progressHint }}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td style="color:var(--color-text-secondary)">{{ item.sizeLabel }}</td>
+                        <td style="text-align:right">
+                          <button v-if="item.canRemove" type="button" style="font-size:12px;font-weight:500;color:var(--color-text-tertiary);background:none;border:none;cursor:pointer" @click="item.remove()">移除</button>
+                          <span v-else style="font-size:11px;color:var(--color-text-tertiary)">{{ item.removeHint }}</span>
+                        </td>
+                      </tr>
+                    </template>
+                  </template>
+                </tbody>
+
+                <!-- 普通模式：逐行展示 -->
+                <tbody v-else>
                   <tr v-for="item in pendingAssetItems" :key="item.key">
                     <td>
                       <div style="max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500" :title="item.name">{{ item.name }}</div>
@@ -520,6 +574,46 @@ const previewItemCount = computed(() => {
 const previewTotalBytes = computed(() => uploadEntryItems.value.reduce((total, item) => total + item.size, 0));
 const hasActiveRun = computed(() => activeRunId.value !== null);
 const previewTotalSizeLabel = computed(() => activeIngestMode.value === "external" ? "外部路径预览" : formatSize(previewTotalBytes.value));
+
+// ── 待处理清单折叠分组 ──
+const COLLAPSE_THRESHOLD = 15;
+const expandedGroups = ref<Set<string>>(new Set());
+const isCollapsed = computed(() => uploadEntryItems.value.length > COLLAPSE_THRESHOLD);
+
+interface GroupedEntry {
+  folder: string;
+  files: UploadEntryProgressItem[];
+  totalSize: number;
+  count: number;
+}
+
+const groupedEntries = computed<GroupedEntry[] | null>(() => {
+  if (!isCollapsed.value) return null;
+  const groups = new Map<string, UploadEntryProgressItem[]>();
+  for (const item of uploadEntryItems.value) {
+    const folder = item.name.includes("/") ? item.name.split("/")[0] : "根目录";
+    if (!groups.has(folder)) groups.set(folder, []);
+    groups.get(folder)!.push(item);
+  }
+  // 有上传中文件的分组默认展开
+  for (const [folder, files] of groups) {
+    const hasActive = files.some((f) => f.state && ["initiating", "uploading", "uploaded", "completing"].includes(f.state.state));
+    if (hasActive) expandedGroups.value.add(folder);
+  }
+  return Array.from(groups.entries()).map(([folder, files]) => ({
+    folder,
+    files,
+    totalSize: files.reduce((sum, f) => sum + f.size, 0),
+    count: files.length,
+  }));
+});
+
+function toggleGroup(folder: string) {
+  const next = new Set(expandedGroups.value);
+  if (next.has(folder)) next.delete(folder);
+  else next.add(folder);
+  expandedGroups.value = next;
+}
 
 const submittableEntryItems = computed(() =>
   uploadEntryItems.value.filter((item) => {
@@ -1361,7 +1455,7 @@ function validateManifestPaths(manifest: Record<string, unknown>, files: File[])
       throw new Error(`manifest.sources 中存在重复 path: ${entry.path}`);
     }
     referencedSourcePaths.add(entry.path);
-    if (!filePathSet.has(entry.path)) {
+    if (!filePathSet.has(entry.path) && !isDirectoryPathInSet(entry.path, filePathSet)) {
       throw new Error(`manifest.sources.${entry.sourceKey}.path 指向的文件不存在: ${entry.path}`);
     }
     const expectedPrefix = `sources/${entry.sourceKey}/`;
@@ -1371,7 +1465,7 @@ function validateManifestPaths(manifest: Record<string, unknown>, files: File[])
   }
 
   for (const artifactPath of collectArtifactPaths(manifest.artifacts)) {
-    if (!filePathSet.has(artifactPath)) {
+    if (!filePathSet.has(artifactPath) && !isDirectoryPathInSet(artifactPath, filePathSet)) {
       throw new Error(`manifest.artifacts 中声明的文件不存在: ${artifactPath}`);
     }
     if (!artifactPath.startsWith("artifacts/")) {
@@ -1412,6 +1506,15 @@ function normalizeManifestPath(value: unknown) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim().replace(/\\/g, "/").replace(/^\/+/, "");
   return trimmed || null;
+}
+
+/** 检查 path 是否指向一个目录——即有文件以 path/ 为前缀 */
+function isDirectoryPathInSet(path: string, filePathSet: Set<string>) {
+  const prefix = path.endsWith("/") ? path : path + "/";
+  for (const fp of filePathSet) {
+    if (fp.startsWith(prefix)) return true;
+  }
+  return false;
 }
 
 function summarizeManifest(manifest: Record<string, unknown>): DirectoryManifestSummary {
