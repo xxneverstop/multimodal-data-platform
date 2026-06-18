@@ -14,6 +14,8 @@ public record CollectionProfileResponse(
         String archiveRuleCode,
         String playbackRuleCode,
         String version,
+        Boolean enabled,
+        String remark,
         List<CollectionProfileSourceResponse> sources
 ) {
 }

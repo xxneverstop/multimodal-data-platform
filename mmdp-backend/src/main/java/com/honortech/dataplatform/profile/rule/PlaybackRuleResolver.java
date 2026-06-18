@@ -19,4 +19,7 @@ public interface PlaybackRuleResolver {
             List<DataFile> sessionFiles,
             JsonNode manifest
     );
+
+    /** 检查给定文件集合是否满足此播放规则的最低要求 */
+    boolean canPlay(List<CollectionProfileSource> profileSources, List<DataFile> sessionFiles);
 }

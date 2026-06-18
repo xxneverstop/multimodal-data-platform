@@ -179,7 +179,7 @@ CREATE TABLE IF NOT EXISTS processing_job (
     parameters_json TEXT NULL COMMENT '作业参数JSON',
     params_json TEXT NULL COMMENT '兼容字段：作业参数JSON',
     result_json TEXT NULL COMMENT '结果JSON',
-    error_message VARCHAR(512) NULL COMMENT '错误信息',
+    error_message TEXT NULL COMMENT '错误信息',
     operator_name VARCHAR(128) NULL COMMENT '操作人员',
     tool_name VARCHAR(128) NULL COMMENT '工具名称',
     tool_version VARCHAR(64) NULL COMMENT '工具版本',
@@ -275,3 +275,28 @@ CREATE TABLE IF NOT EXISTS sys_user (
     INDEX idx_sys_user_role_code (role_code),
     INDEX idx_sys_user_status (status)
 ) COMMENT='平台用户表';
+
+CREATE TABLE IF NOT EXISTS pipeline_definition (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Pipeline主键ID',
+    pipeline_id VARCHAR(64) NOT NULL COMMENT 'Pipeline编码',
+    display_name VARCHAR(128) NOT NULL COMMENT '显示名称',
+    description VARCHAR(512) NULL COMMENT '描述',
+    input_asset_types JSON NULL COMMENT '所需输入资产类型列表',
+    output_asset_types JSON NULL COMMENT '产出资产类型列表',
+    executor_type VARCHAR(32) NOT NULL DEFAULT 'PYTHON_WORKER' COMMENT '执行方式',
+    enabled TINYINT NOT NULL DEFAULT 1 COMMENT '是否启用',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    UNIQUE INDEX uk_pipeline_id (pipeline_id)
+) COMMENT='处理Pipeline定义表';
+
+CREATE TABLE IF NOT EXISTS profile_pipeline (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Profile-Pipeline关联主键',
+    profile_id BIGINT NOT NULL COMMENT '关联Profile ID',
+    pipeline_id VARCHAR(64) NOT NULL COMMENT '关联Pipeline ID',
+    enabled TINYINT NOT NULL DEFAULT 1 COMMENT '是否启用',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    CONSTRAINT fk_pp_profile FOREIGN KEY (profile_id) REFERENCES collection_profile(id),
+    CONSTRAINT fk_pp_pipeline FOREIGN KEY (pipeline_id) REFERENCES pipeline_definition(pipeline_id),
+    UNIQUE INDEX uk_profile_pipeline (profile_id, pipeline_id)
+) COMMENT='Profile与Pipeline关联表';

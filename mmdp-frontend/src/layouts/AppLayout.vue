@@ -161,6 +161,7 @@ const managementItems: NavItem[] = [
   { label: "流程", to: "/management/workflows", icon: "git-branch" },
   { label: "存储", to: "/management/storages", icon: "database" },
   { label: "字典", to: "/management/dictionaries", icon: "book" },
+  { label: "Profile", to: "/management/profiles", icon: "layers" },
 ];
 
 const mobileItems = computed<NavItem[]>(() => {

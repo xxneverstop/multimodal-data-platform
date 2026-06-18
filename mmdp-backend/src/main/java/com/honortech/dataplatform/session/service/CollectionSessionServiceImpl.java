@@ -110,6 +110,11 @@ public class CollectionSessionServiceImpl implements CollectionSessionService {
 
     @Override
     public SessionPlaybackResponse getPlaybackData(String sessionId) {
+        return getPlaybackData(sessionId, null);
+    }
+
+    @Override
+    public SessionPlaybackResponse getPlaybackData(String sessionId, Long jobId) {
         CollectionSession session = getBySessionId(sessionId);
         JsonNode manifest = parseJson(session.getManifestJson());
         List<DataFile> sessionFiles = findSessionFiles(session.getTaskId(), session.getId(), sessionId);
@@ -119,21 +124,65 @@ public class CollectionSessionServiceImpl implements CollectionSessionService {
             CollectionProfile profile = collectionProfileService.getRequiredById(session.getProfileId());
             List<CollectionProfileSource> profileSources = collectionProfileService.listSourcesByProfileId(profile.getId());
             PlaybackRuleResolver playbackRule = profileRuleRegistry.getPlaybackRule(profile.getPlaybackRuleCode());
-            sources = playbackRule.buildSources(profile, profileSources, sessionFiles, manifest);
+            List<DataFile> playbackFiles = buildPlaybackFileList(sessionFiles, profileSources, jobId);
+            sources = playbackRule.buildSources(profile, profileSources, playbackFiles, manifest);
             profileCode = profile.getProfileCode();
         }
         return new SessionPlaybackResponse(
-                session.getSessionId(),
-                session.getSessionCode(),
-                session.getTaskId(),
-                session.getSubjectCode(),
-                session.getActionName(),
-                profileCode,
-                session.getTimestampPolicy(),
-                session.getStartedAt(),
-                session.getDurationMs(),
+                session.getSessionId(), session.getSessionCode(), session.getTaskId(),
+                session.getSubjectCode(), session.getActionName(), profileCode,
+                session.getTimestampPolicy(), session.getStartedAt(), session.getDurationMs(),
                 sources
         );
+    }
+
+    /**
+     * 构建回放文件列表：
+     * - 未指定 jobId：返回全部文件（原行为）
+     * - 指定 jobId：返回该 job 的产物（fileRole=PROCESSED_OUTPUT）+ Profile 中 playback_kind 非空的原始文件
+     */
+    private List<DataFile> buildPlaybackFileList(
+            List<DataFile> allSessionFiles,
+            List<CollectionProfileSource> profileSources,
+            Long jobId) {
+        if (jobId == null) {
+            return allSessionFiles;
+        }
+        // 收集 job 产物
+        List<DataFile> result = new ArrayList<>();
+        for (DataFile f : allSessionFiles) {
+            if ("PROCESSED_OUTPUT".equals(f.getFileRole())) {
+                result.add(f);
+            }
+        }
+        // 收集 playback_kind 非空的原始 source 对应的文件
+        java.util.Set<String> playableKeys = new java.util.HashSet<>();
+        for (CollectionProfileSource ps : profileSources) {
+            if (ps.getPlaybackKind() != null && !ps.getPlaybackKind().isBlank()) {
+                playableKeys.add(ps.getSourceKey().toLowerCase());
+            }
+        }
+        for (DataFile f : allSessionFiles) {
+            if ("PROCESSED_OUTPUT".equals(f.getFileRole())) {
+                continue; // 已经加过了
+            }
+            if (f.getSourceKey() != null && playableKeys.contains(f.getSourceKey().toLowerCase())) {
+                result.add(f);
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public boolean canPlay(String sessionId, Long jobId) {
+        CollectionSession session = getBySessionId(sessionId);
+        if (session.getProfileId() == null) return false;
+        CollectionProfile profile = collectionProfileService.getRequiredById(session.getProfileId());
+        List<CollectionProfileSource> profileSources = collectionProfileService.listSourcesByProfileId(profile.getId());
+        List<DataFile> allFiles = findSessionFiles(session.getTaskId(), session.getId(), sessionId);
+        List<DataFile> playbackFiles = buildPlaybackFileList(allFiles, profileSources, jobId);
+        PlaybackRuleResolver resolver = profileRuleRegistry.getPlaybackRule(profile.getPlaybackRuleCode());
+        return resolver.canPlay(profileSources, playbackFiles);
     }
 
     private SessionResponse toResponse(CollectionSession session, String taskName) {

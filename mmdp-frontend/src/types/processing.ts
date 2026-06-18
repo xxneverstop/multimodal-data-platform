@@ -14,7 +14,7 @@ export interface ProcessingJobResponse {
   id: number;
   taskId: number;
   taskCode?: string | null;
-  sessionId?: string | null;
+  sessionId?: number | null;
   sessionCode?: string | null;
   pipelineId: string;
   executorType: string;
@@ -35,6 +35,12 @@ export interface ProcessingJobResponse {
 }
 
 export interface CreateProcessingJobRequest {
+  pipelineId: string;
+  parameters?: Record<string, unknown>;
+}
+
+/** 对 Session 创建处理任务 */
+export interface CreateSessionJobRequest {
   pipelineId: string;
   parameters?: Record<string, unknown>;
 }

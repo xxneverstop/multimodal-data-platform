@@ -1,618 +1,370 @@
 <template>
-  <div class="playback-container">
-    <!-- Top Bar -->
-    <header class="playback-header">
-      <button class="back-btn" @click="$router.back()">
-        <BaseIcon name="arrow-left" size="md" /> 返回
-      </button>
-      <div class="header-info" v-if="data">
-        <span class="session-badge">{{ data.sessionId }}</span>
-        <span class="header-sep">|</span>
+  <div class="pb-root">
+    <!-- top bar -->
+    <header class="pb-topbar">
+      <button class="pb-back" @click="window.close()">← 关闭</button>
+      <div class="pb-info" v-if="data">
+        <span class="pb-session">{{ data.sessionId }}</span>
+        <span class="pb-sep">|</span>
         <span>{{ data.subjectCode }} / {{ data.actionName }}</span>
-        <span class="header-sep">|</span>
-        <span>{{ formatDuration(data.durationMs) }}</span>
+        <span class="pb-sep">|</span>
+        <span>{{ fmt(data.durationMs) }}</span>
       </div>
-      <div class="header-spacer" />
+      <button class="pb-toggle-sidebar" @click="sidebarOpen = !sidebarOpen">☰</button>
     </header>
 
-    <div v-if="loading" class="loading-state">加载播放数据中...</div>
+    <div class="pb-body">
+      <!-- sidebar -->
+      <aside class="pb-sidebar" :class="{ collapsed: !sidebarOpen }">
+        <div class="pb-sb-section">
+          <div class="pb-sb-title">Session 信息</div>
+          <dl class="pb-sb-meta">
+            <dt>Subject</dt><dd>{{ data?.subjectCode ?? '-' }}</dd>
+            <dt>Action</dt><dd>{{ data?.actionName ?? '-' }}</dd>
+            <dt>Profile</dt><dd>{{ data?.profileCode ?? '-' }}</dd>
+            <dt>时长</dt><dd>{{ fmt(data?.durationMs) }}</dd>
+            <dt>时间策略</dt><dd>{{ data?.timestampPolicy ?? '-' }}</dd>
+          </dl>
+        </div>
 
-    <template v-if="data && !loading">
-      <!-- Video Grid -->
-      <div class="video-grid">
-        <div
-          v-for="(src, name) in videoSources"
-          :key="name"
-          class="video-panel"
-        >
-          <div class="video-label">{{ src.label }}</div>
-          <div class="video-wrapper">
-            <video
-              v-if="src.videoUrl && !videoErrors[name]"
-              :ref="(el) => setVideoRef(name, el)"
-              :src="src.videoUrl"
-              class="video-player"
-              preload="auto"
-              @timeupdate="(e) => onTimeUpdate(name, e)"
-              @loadedmetadata="(e) => onVideoReady(name, e)"
-              @error="(e) => onVideoError(name, e)"
-              @ended="onEnded"
-              playsinline
-            />
-            <div v-else-if="videoErrors[name]" class="video-error">
-              <div class="video-error-title">视频加载失败</div>
-              <div class="video-error-detail">{{ videoErrors[name] }}</div>
+        <div class="pb-sb-section">
+          <div class="pb-sb-title">播放源</div>
+          <ul class="pb-src-list">
+            <li v-for="(src, key) in data?.sources ?? {}" :key="key" class="pb-src-item">
+              <span class="pb-src-icon" :class="src.type === 'video' ? 'pb-src-video' : src.type === 'imu' || src.type === 'imu_curve' ? 'pb-src-imu' : 'pb-src-other'"></span>
+              <span class="pb-src-label">{{ src.label || key }}</span>
+              <span class="pb-src-type">{{ src.type }}</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="pb-sb-section">
+          <div class="pb-sb-title">播放设置</div>
+          <div class="pb-speed-row">
+            <span class="pb-speed-label">速度</span>
+            <button v-for="s in [0.5, 1, 1.5, 2]" :key="s" class="pb-speed-btn" :class="{ active: playbackRate === s }" @click="setSpeed(s)">{{ s }}x</button>
+          </div>
+        </div>
+
+        <div class="pb-sb-section" v-if="videoSourcesCount > 0">
+          <div class="pb-sb-title">布局</div>
+          <select v-model.number="videoCols" class="pb-layout-sel">
+            <option :value="1">1 列</option>
+            <option :value="2" v-if="videoSourcesCount >= 2">2 列</option>
+            <option :value="3" v-if="videoSourcesCount >= 3">3 列</option>
+            <option :value="4" v-if="videoSourcesCount >= 4">4 列</option>
+          </select>
+        </div>
+
+        <div class="pb-sb-section pb-sb-annotation">
+          <div class="pb-sb-title">标注</div>
+          <p class="pb-sb-hint">标注功能即将上线</p>
+        </div>
+      </aside>
+
+      <!-- main -->
+      <main class="pb-main">
+        <!-- loading / error -->
+        <div v-if="loading" class="pb-state">加载播放数据中...</div>
+        <div v-else-if="apiError" class="pb-state pb-state-err">{{ apiError }}</div>
+
+        <template v-if="data && !loading && !apiError">
+          <!-- videos -->
+          <div class="pb-video-area">
+            <div v-if="!videoEntries.length" class="pb-state">此 Session 没有可播放的视频</div>
+            <div v-else class="pb-video-grid" :style="{ gridTemplateColumns: `repeat(${videoCols}, 1fr)` }">
+              <div v-for="(src, key) in videoEntries" :key="key" class="pb-video-panel">
+                <div class="pb-video-label">{{ src.label || key }}</div>
+                <div class="pb-video-wrap">
+                  <video
+                    v-if="src.videoUrl && !videoErrors[key]"
+                    :ref="el => setVidRef(key, el)"
+                    :src="src.videoUrl"
+                    class="pb-video"
+                    preload="auto"
+                    @timeupdate="e => onVidTime(key, e)"
+                    @loadedmetadata="() => onVidReady(key)"
+                    @error="e => onVidErr(key, e)"
+                    @ended="onEnded"
+                    playsinline
+                  />
+                  <div v-else-if="videoErrors[key]" class="pb-video-placeholder pb-video-err">{{ videoErrors[key] }}</div>
+                  <div v-else class="pb-video-placeholder">加载中...</div>
+                </div>
+              </div>
             </div>
-            <div v-else class="video-placeholder">无视频</div>
           </div>
-          <div class="video-overlay" v-if="videoTimes[name] != null">
-            <span>{{ src.fps?.toFixed(1) }} fps</span>
-            <span>{{ formatTime(videoTimes[name]) }}</span>
-          </div>
-        </div>
-      </div>
 
-      <!-- IMU Panel -->
-      <div class="imu-panel" v-if="imuSource">
-        <div class="imu-header">
-          <span class="imu-title">{{ imuSource.label }}</span>
-          <span class="imu-rate" v-if="imuSource.sampleRate">{{ imuSource.sampleRate }}Hz / {{ imuSource.sampleCount }} samples</span>
-        </div>
-        <div class="imu-grid">
-          <div class="imu-group">
-            <div class="imu-group-title">Accelerometer (m/s²)</div>
-            <div class="imu-values">
-              <span class="val-x">X: {{ fmtVal(currentImu.acc?.x) }}</span>
-              <span class="val-y">Y: {{ fmtVal(currentImu.acc?.y) }}</span>
-              <span class="val-z">Z: {{ fmtVal(currentImu.acc?.z) }}</span>
+          <!-- IMU -->
+          <div class="pb-imu" v-if="imuEntries.length">
+            <div class="pb-imu-hdr">
+              <span class="pb-imu-title">IMU 数据</span>
+              <span class="pb-imu-meta">{{ imuEntries.length }} 源</span>
+            </div>
+            <div class="pb-imu-grid">
+              <div v-for="(src, key) in imuEntries" :key="key" class="pb-imu-card">
+                <div class="pb-imu-card-title">{{ src.label || key }}</div>
+                <div class="pb-imu-vals">
+                  <span class="pb-v-x">X: {{ fmtVal(currentImu[key]?.acc?.x) }}</span>
+                  <span class="pb-v-y">Y: {{ fmtVal(currentImu[key]?.acc?.y) }}</span>
+                  <span class="pb-v-z">Z: {{ fmtVal(currentImu[key]?.acc?.z) }}</span>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="imu-group">
-            <div class="imu-group-title">Gyroscope (rad/s)</div>
-            <div class="imu-values">
-              <span class="val-x">X: {{ fmtVal(currentImu.gyro?.x) }}</span>
-              <span class="val-y">Y: {{ fmtVal(currentImu.gyro?.y) }}</span>
-              <span class="val-z">Z: {{ fmtVal(currentImu.gyro?.z) }}</span>
-            </div>
-          </div>
-          <div class="imu-group">
-            <div class="imu-group-title">Quaternion</div>
-            <div class="imu-values">
-              <span>W: {{ fmtVal(currentImu.quat?.w) }}</span>
-              <span>X: {{ fmtVal(currentImu.quat?.x) }}</span>
-              <span>Y: {{ fmtVal(currentImu.quat?.y) }}</span>
-              <span>Z: {{ fmtVal(currentImu.quat?.z) }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
+        </template>
+      </main>
+    </div>
 
-      <!-- Loading progress bar (bottom, shown while resources load) -->
-      <div v-if="!allLoaded" class="load-progress-bar">
-        <div class="load-progress-text">
-          <span>正在从 OSS 加载数据...</span>
-          <span>{{ loadedResources }} / {{ totalResources }} ({{ loadProgress }}%)</span>
-        </div>
-        <div class="load-progress-track">
-          <div class="load-progress-fill" :style="{ width: loadProgress + '%' }" />
-        </div>
+    <!-- footer: timeline + controls -->
+    <footer class="pb-footer" v-if="data && !loading && !apiError">
+      <div class="pb-timeline">
+        <span class="pb-tl-time">{{ fmt(masterTime * 1000) }}</span>
+        <input type="range" class="pb-tl-slider" :min="0" :max="maxDuration" :step="0.05" :value="masterTime" @input="seekAll" />
+        <span class="pb-tl-time">{{ fmt(data.durationMs) }}</span>
       </div>
-
-      <!-- Timeline (shown after all resources loaded) -->
-      <div v-if="allLoaded" class="timeline-bar">
-        <div class="timeline-label">{{ formatTime(masterTime) }}</div>
-        <input
-          type="range"
-          class="timeline-slider"
-          :min="0"
-          :max="data.durationMs / 1000"
-          :step="0.05"
-          :value="masterTime"
-          @input="seekAll"
-        />
-        <div class="timeline-label">{{ formatTime(data.durationMs / 1000) }}</div>
+      <div class="pb-ctrls">
+        <button class="pb-ctrl" @click="skipBackward">⏪ -5s</button>
+        <button class="pb-ctrl pb-ctrl-play" @click="togglePlay">{{ playing ? '⏸ 暂停' : '▶ 播放' }}</button>
+        <button class="pb-ctrl" @click="skipForward">⏩ +5s</button>
       </div>
-
-      <!-- Playback Controls -->
-      <div class="playback-controls">
-        <button class="ctrl-btn" @click="skipBackward" title="后退5秒">
-          <BaseIcon name="chevron-down" size="md" class="icon-rotate-90" />
-          <span class="ctrl-label">后退</span>
-        </button>
-        <button class="ctrl-btn ctrl-play" @click="togglePlay">
-          <BaseIcon :name="playing ? 'pause' : 'play'" size="lg" />
-          <span class="ctrl-label">{{ playing ? '暂停' : '播放' }}</span>
-        </button>
-        <button class="ctrl-btn" @click="skipForward" title="快进5秒">
-          <BaseIcon name="chevron-down" size="md" class="icon-rotate-270" />
-          <span class="ctrl-label">快进</span>
-        </button>
-      </div>
-    </template>
+    </footer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef, watch, onBeforeUnmount } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import { useRoute } from "vue-router";
 import { fetchSessionPlayback } from "@/api/sessions";
 import type { SessionPlaybackResponse, PlaybackSource } from "@/api/sessions";
-import BaseIcon from "@/components/BaseIcon.vue";
 
 const route = useRoute();
+
+// state
 const loading = ref(true);
-const playing = ref(false);
-const ready = ref(false);
+const apiError = ref("");
 const data = shallowRef<SessionPlaybackResponse | null>(null);
+const playing = ref(false);
 const masterTime = ref(0);
+const playbackRate = ref(1);
+const sidebarOpen = ref(true);
+const videoCols = ref(2);
 const videoRefs: Record<string, HTMLVideoElement | null> = {};
 const videoTimes: Record<string, number> = {};
-const imuData = shallowRef<any[]>([]);
 const videoErrors = ref<Record<string, string>>({});
+const imuDatasets = shallowRef<Record<string, any[]>>({});
+const SKIP = 5;
 
-// Progress tracking
-const totalResources = ref(0);
-const loadedResources = ref(0);
-const allLoaded = computed(() => loadedResources.value >= totalResources.value);
-const loadProgress = computed(() => {
-  if (!totalResources.value) return 0;
-  return Math.round((loadedResources.value / totalResources.value) * 100);
+// computed
+const maxDuration = computed(() => (data.value?.durationMs ?? 0) / 1000);
+
+const videoEntries = computed(() => {
+  if (!data.value) return [];
+  return Object.entries(data.value.sources).filter(([, s]) => s.type === "video" && s.videoUrl);
 });
 
-function setVideoRef(name: string, el: any) {
-  videoRefs[name] = el as HTMLVideoElement | null;
-}
+const videoSourcesCount = computed(() => videoEntries.value.length);
 
-const videoSources = computed(() => {
-  if (!data.value) return {};
-  const result: Record<string, PlaybackSource> = {};
-  for (const [name, src] of Object.entries(data.value.sources)) {
-    if (src.type === "video") result[name] = src;
+const imuEntries = computed(() => {
+  if (!data.value) return [];
+  return Object.entries(data.value.sources).filter(([, s]) => s.type === "imu" || s.type === "imu_curve");
+});
+
+const currentImu = computed(() => {
+  const result: Record<string, any> = {};
+  for (const [key, ds] of Object.entries(imuDatasets.value)) {
+    const t = masterTime.value * 1000;
+    let best = ds[0];
+    for (const s of ds) {
+      if (s._t <= t) best = s;
+      else break;
+    }
+    result[key] = best ?? {};
   }
   return result;
 });
 
-const imuSource = computed(() => {
-  if (!data.value) return null;
-  for (const src of Object.values(data.value.sources)) {
-    if (src.type === "imu") return src;
-  }
-  return null;
-});
-
-const currentImu = computed(() => {
-  if (!imuData.value.length) return { acc: {}, gyro: {}, quat: {} };
-  const t = masterTime.value * 1000; // ms
-  let best = imuData.value[0];
-  for (const sample of imuData.value) {
-    if (sample._t <= t) {
-      best = sample;
-    } else {
-      break;
-    }
-  }
-  return best;
-});
-
-function loadImuData(jsonlUrl: string) {
-  fetch(jsonlUrl)
-    .then((r) => r.text())
-    .then((text) => {
-      const lines = text.trim().split("\n").filter(Boolean);
-      const parsed = lines.map((line) => {
-        const obj = JSON.parse(line);
-        const startedAtMs = data.value ? new Date(data.value.startedAt).getTime() : 0;
-        return {
-          _t: obj.hostReceiveTimestamp - startedAtMs,
-          acc: obj.latest?.acc || {},
-          gyro: obj.latest?.gyro || {},
-          quat: obj.latest?.quat || {},
-        };
-      });
-      imuData.value = parsed;
-      loadedResources.value++;
-    })
-    .catch(() => {
-      loadedResources.value++; // count as done even on error
-    });
-}
-
-const SKIP_SECONDS = 5;
-
-function skipBackward() {
-  const t = Math.max(0, masterTime.value - SKIP_SECONDS);
-  masterTime.value = t;
-  for (const ref of Object.values(videoRefs)) {
-    if (ref) ref.currentTime = t;
-  }
-}
-
-function skipForward() {
-  const maxT = data.value ? data.value.durationMs / 1000 : Infinity;
-  const t = Math.min(maxT, masterTime.value + SKIP_SECONDS);
-  masterTime.value = t;
-  for (const ref of Object.values(videoRefs)) {
-    if (ref) ref.currentTime = t;
-  }
-}
-
-function togglePlay() {
-  if (playing.value) {
-    pauseAll();
-  } else {
-    playAll();
-  }
-}
-
-function playAll() {
-  playing.value = true;
-  for (const ref of Object.values(videoRefs)) {
-    if (ref) ref.play().catch(() => {});
-  }
-}
-
-function pauseAll() {
-  playing.value = false;
-  for (const ref of Object.values(videoRefs)) {
-    if (ref) ref.pause();
-  }
-}
-
-function onTimeUpdate(name: string, e: Event) {
-  const video = e.target as HTMLVideoElement;
-  videoTimes[name] = video.currentTime;
-  if (name === "left" || (!videoRefs["left"] && Object.keys(videoRefs)[0] === name)) {
-    masterTime.value = video.currentTime;
-  }
-}
-
-function onVideoReady(name: string, _e: Event) {
-  loadedResources.value++;
-  checkAllReady();
-}
-
-function onVideoError(name: string, e: Event) {
-  const video = e.target as HTMLVideoElement;
-  videoErrors.value[name] = video.error
-    ? `MEDIA_ERR_${video.error.code}: ${video.error.message}`
-    : "未知错误";
-  loadedResources.value++;
-  checkAllReady();
-}
-
-function checkAllReady() {
-  const videoNames = Object.keys(videoSources.value).filter(
-    k => videoSources.value[k]?.videoUrl
-  );
-  const ok = videoNames.filter(k => {
-    const ref = videoRefs[k];
-    return ref && ref.readyState >= 2;
-  });
-  const err = Object.keys(videoErrors.value);
-  const settled = new Set([...ok, ...err]);
-  if (settled.size >= videoNames.length) {
-    ready.value = true;
-  }
-}
-
-function onEnded() {
-  if (Object.values(videoRefs).every((ref) => !ref || ref.ended || ref.paused)) {
-    playing.value = false;
-  }
-}
-
-function seekAll(e: Event) {
-  const target = e.target as HTMLInputElement;
-  const t = parseFloat(target.value);
-  masterTime.value = t;
-  for (const ref of Object.values(videoRefs)) {
-    if (ref) ref.currentTime = t;
-  }
-}
-
-function formatTime(seconds: number | null): string {
-  if (seconds == null || isNaN(seconds)) return "00:00";
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
+// helpers
+function fmt(ms: number | null | undefined): string {
+  if (!ms) return "00:00";
+  const sec = ms / 1000;
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
+function fmtVal(v: number | undefined): string { return v != null ? v.toFixed(3) : "-"; }
 
-function formatDuration(ms: number): string {
-  const totalSec = ms / 1000;
-  return formatTime(totalSec);
+function setVidRef(key: string, el: any) { videoRefs[key] = el as HTMLVideoElement | null; }
+
+// playback controls
+function togglePlay() {
+  if (playing.value) { pauseAll(); } else { playAll(); }
+}
+function playAll() {
+  playing.value = true;
+  for (const [, s] of videoEntries.value) {
+    const el = videoRefs[s.label ?? ""];
+    if (el) el.play().catch(() => {});
+  }
+}
+function pauseAll() {
+  playing.value = false;
+  for (const [, s] of videoEntries.value) {
+    const el = videoRefs[s.label ?? ""];
+    if (el) el.pause();
+  }
+}
+function seekAll(e: Event) {
+  const t = parseFloat((e.target as HTMLInputElement).value);
+  masterTime.value = t;
+  for (const el of Object.values(videoRefs)) {
+    if (el) el.currentTime = t;
+  }
+}
+function skipBackward() {
+  masterTime.value = Math.max(0, masterTime.value - SKIP);
+  for (const el of Object.values(videoRefs)) if (el) el.currentTime = masterTime.value;
+}
+function skipForward() {
+  masterTime.value = Math.min(maxDuration.value, masterTime.value + SKIP);
+  for (const el of Object.values(videoRefs)) if (el) el.currentTime = masterTime.value;
+}
+function setSpeed(s: number) {
+  playbackRate.value = s;
+  for (const el of Object.values(videoRefs)) if (el) el.playbackRate = s;
 }
 
-function fmtVal(v: number | undefined): string {
-  return v != null ? v.toFixed(3) : "-";
+function onVidTime(key: string, e: Event) {
+  videoTimes[key] = (e.target as HTMLVideoElement).currentTime;
+  // use first video as master
+  if (Object.keys(videoRefs)[0] === key) {
+    masterTime.value = (e.target as HTMLVideoElement).currentTime;
+  }
+}
+function onVidReady(_key: string) {}
+function onVidErr(key: string, e: Event) {
+  const v = e.target as HTMLVideoElement;
+  videoErrors.value[key] = v.error ? `加载失败 (错误 ${v.error.code})` : "未知错误";
+}
+function onEnded() {
+  if (Object.values(videoRefs).every(r => !r || r.ended || r.paused)) playing.value = false;
 }
 
+// IMU loading
+function loadImuData(jsonlUrl: string) {
+  fetch(jsonlUrl).then(r => r.text()).then(text => {
+    const lines = text.trim().split("\n").filter(Boolean);
+    const parsed = lines.map(line => {
+      const obj = JSON.parse(line);
+      const startedAtMs = data.value ? new Date(data.value.startedAt).getTime() : 0;
+      return { _t: obj.hostReceiveTimestamp - startedAtMs, acc: obj.latest?.acc ?? {}, gyro: obj.latest?.gyro ?? {}, quat: obj.latest?.quat ?? {} };
+    });
+    imuDatasets.value = { ...imuDatasets.value, [jsonlUrl]: parsed };
+  }).catch(() => {});
+}
+
+// mount
 onMounted(async () => {
   const sid = route.params.sessionId as string;
-  if (!sid) {
-    loading.value = false;
-    return;
-  }
+  if (!sid) { loading.value = false; return; }
   try {
     data.value = await fetchSessionPlayback(sid);
-    // Count total resources
-    let count = 0;
-    for (const src of Object.values(data.value.sources)) {
-      if (src.type === "video" && src.videoUrl) count++;
-      if (src.type === "imu" && src.jsonlUrl) count++;
+    if (!data.value || !Object.keys(data.value.sources).length) {
+      apiError.value = "此 Session 无可播放内容，请先执行处理任务生成可播放数据。";
+      loading.value = false;
+      return;
     }
-    totalResources.value = count;
-    // Load IMU data
-    for (const src of Object.values(data.value.sources)) {
-      if (src.type === "imu" && src.jsonlUrl) {
+    for (const [, src] of Object.entries(data.value.sources)) {
+      if ((src.type === "imu" || src.type === "imu_curve") && src.jsonlUrl) {
         loadImuData(src.jsonlUrl);
       }
     }
-    // Start 30s load timeout for each video source
-    for (const [name, src] of Object.entries(data.value.sources)) {
-      if (src.type === "video" && src.videoUrl) {
-        setTimeout(() => {
-          if (!videoRefs[name]?.readyState && !videoErrors.value[name]) {
-            videoErrors.value[name] = "加载超时（30秒无响应）";
-            loadedResources.value++;
-            checkAllReady();
-          }
-        }, 30000);
-      }
-    }
-  } catch {
-    // ignore
+  } catch (e: any) {
+    apiError.value = e?.message || String(e) || "加载播放数据失败";
   }
   loading.value = false;
 });
 </script>
 
+<style>
+/* global reset for fullscreen page */
+html, body, #app { height: 100%; margin: 0; }
+</style>
+
 <style scoped>
-.playback-container {
-  min-height: 100vh;
-  background: #0f0f0f;
-  color: #e0e0e0;
-  display: flex;
-  flex-direction: column;
-}
+.pb-root { display:flex; flex-direction:column; height:100vh; background:#141414; color:#d4d4d4; font-family: system-ui, -apple-system, sans-serif; overflow:hidden; }
 
-.playback-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 10px 20px;
-  background: #1a1a1a;
-  border-bottom: 1px solid #333;
-  flex-shrink: 0;
-}
+/* topbar */
+.pb-topbar { display:flex; align-items:center; gap:16px; padding:8px 16px; background:#1e1e1e; border-bottom:1px solid #333; flex-shrink:0; }
+.pb-back, .pb-toggle-sidebar { background:none; border:1px solid #555; color:#aaa; padding:4px 12px; border-radius:4px; cursor:pointer; font-size:13px; }
+.pb-back:hover, .pb-toggle-sidebar:hover { background:#333; color:#fff; }
+.pb-info { font-size:13px; }
+.pb-session { color:#4ade80; font-weight:600; }
+.pb-sep { color:#555; margin:0 8px; }
+.pb-toggle-sidebar { margin-left:auto; }
 
-.back-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: none;
-  border: 1px solid #555;
-  color: #ccc;
-  padding: 6px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 13px;
-}
-.back-btn:hover { background: #333; }
+/* body */
+.pb-body { display:flex; flex:1; overflow:hidden; }
 
-.header-info { font-size: 14px; }
-.session-badge { color: #4ade80; font-weight: 600; }
-.header-sep { color: #555; margin: 0 8px; }
-.header-spacer { flex: 1; }
+/* sidebar */
+.pb-sidebar { width:220px; background:#1e1e1e; border-right:1px solid #333; overflow-y:auto; flex-shrink:0; padding:12px; display:flex; flex-direction:column; gap:16px; transition:width .2s; }
+.pb-sidebar.collapsed { width:0; padding:0; overflow:hidden; border:none; }
+.pb-sb-section {  }
+.pb-sb-title { font-size:11px; font-weight:600; text-transform:uppercase; color:#888; letter-spacing:.06em; margin-bottom:6px; }
+.pb-sb-meta { font-size:12px; }
+.pb-sb-meta dt { color:#888; margin-top:4px; }
+.pb-sb-meta dd { color:#ccc; margin:0 0 4px 0; }
+.pb-src-list { list-style:none; padding:0; margin:0; }
+.pb-src-item { display:flex; align-items:center; gap:6px; padding:4px 0; font-size:12px; }
+.pb-src-icon { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.pb-src-video { background:#3b82f6; }
+.pb-src-imu { background:#f59e0b; }
+.pb-src-other { background:#666; }
+.pb-src-label { flex:1; color:#ccc; }
+.pb-src-type { color:#666; font-size:10px; }
+.pb-speed-row { display:flex; align-items:center; gap:4px; }
+.pb-speed-label { font-size:12px; color:#888; margin-right:4px; }
+.pb-speed-btn { background:#2a2a2a; border:1px solid #444; color:#aaa; padding:2px 8px; border-radius:3px; cursor:pointer; font-size:11px; }
+.pb-speed-btn.active { background:#2563eb; border-color:#2563eb; color:#fff; }
+.pb-speed-btn:hover { border-color:#888; }
+.pb-layout-sel { background:#2a2a2a; border:1px solid #444; color:#ccc; padding:4px 8px; border-radius:4px; font-size:12px; width:100%; }
+.pb-sb-hint { font-size:11px; color:#666; }
+.pb-sb-annotation { margin-top:auto; border-top:1px solid #333; padding-top:12px; }
 
-/* Playback Controls */
-.playback-controls {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 24px;
-  padding: 12px 20px;
-  background: #1a1a1a;
-  border-top: 1px solid #333;
-  flex-shrink: 0;
-}
+/* main */
+.pb-main { flex:1; overflow-y:auto; display:flex; flex-direction:column; }
+.pb-state { flex:1; display:flex; align-items:center; justify-content:center; color:#888; font-size:16px; }
+.pb-state-err { color:#ef4444; }
 
-.ctrl-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  background: none;
-  border: none;
-  color: #aaa;
-  cursor: pointer;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  transition: background 0.15s;
-}
-.ctrl-btn:hover { background: #333; color: #fff; }
+/* video area */
+.pb-video-area { padding:12px; flex:1; }
+.pb-video-grid { display:grid; gap:8px; }
+.pb-video-panel { display:flex; flex-direction:column; min-height:200px; }
+.pb-video-label { font-size:11px; color:#888; margin-bottom:4px; }
+.pb-video-wrap { flex:1; background:#000; border-radius:4px; overflow:hidden; display:flex; align-items:center; justify-content:center; min-height:180px; }
+.pb-video { width:100%; height:100%; object-fit:contain; }
+.pb-video-placeholder { color:#666; font-size:13px; }
+.pb-video-err { color:#ef4444; }
 
-.ctrl-btn.ctrl-play {
-  background: #2563eb;
-  color: #fff;
-  padding: 10px 24px;
-  border-radius: 8px;
-}
-.ctrl-btn.ctrl-play:hover { background: #1d4ed8; }
+/* IMU */
+.pb-imu { padding:8px 16px; background:#1e1e1e; border-top:1px solid #333; flex-shrink:0; }
+.pb-imu-hdr { display:flex; align-items:baseline; gap:12px; margin-bottom:8px; }
+.pb-imu-title { font-size:13px; font-weight:600; }
+.pb-imu-meta { font-size:11px; color:#888; }
+.pb-imu-grid { display:flex; gap:24px; }
+.pb-imu-card {  }
+.pb-imu-card-title { font-size:11px; color:#888; margin-bottom:2px; }
+.pb-imu-vals { display:flex; gap:10px; font-size:12px; font-family:monospace; }
+.pb-v-x { color:#ef4444; } .pb-v-y { color:#22c55e; } .pb-v-z { color:#3b82f6; }
 
-.ctrl-label { font-size: 12px; margin-top: 2px; }
-
-.icon-rotate-90 { transform: rotate(90deg); }
-.icon-rotate-270 { transform: rotate(270deg); }
-
-.loading-state {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  color: #888;
-}
-
-.video-grid {
-  display: flex;
-  gap: 8px;
-  padding: 12px 20px;
-  flex: 1;
-  min-height: 0;
-}
-
-.video-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.video-label {
-  font-size: 12px;
-  color: #aaa;
-  margin-bottom: 4px;
-  font-weight: 500;
-}
-
-.video-wrapper {
-  flex: 1;
-  background: #000;
-  border-radius: 4px;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.video-player {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.video-placeholder {
-  color: #666;
-  font-size: 14px;
-}
-
-.video-error {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: #1a0a0a;
-  border: 1px solid #5c1a1a;
-  border-radius: 4px;
-  padding: 20px;
-}
-.video-error-title { color: #ef4444; font-size: 14px; font-weight: 600; }
-.video-error-detail { color: #888; font-size: 12px; font-family: monospace; }
-
-.video-overlay {
-  display: flex;
-  justify-content: space-between;
-  padding: 4px 8px;
-  font-size: 11px;
-  color: #888;
-  font-family: monospace;
-}
-
-/* IMU Panel */
-.imu-panel {
-  padding: 12px 20px;
-  background: #1a1a1a;
-  border-top: 1px solid #333;
-  border-bottom: 1px solid #333;
-  flex-shrink: 0;
-}
-
-.imu-header {
-  display: flex;
-  align-items: baseline;
-  gap: 16px;
-  margin-bottom: 8px;
-}
-
-.imu-title { font-size: 14px; font-weight: 600; }
-.imu-rate { font-size: 12px; color: #888; }
-
-.imu-grid {
-  display: flex;
-  gap: 32px;
-}
-
-.imu-group-title {
-  font-size: 11px;
-  color: #888;
-  margin-bottom: 4px;
-}
-
-.imu-values {
-  display: flex;
-  gap: 12px;
-  font-size: 13px;
-  font-family: monospace;
-}
-
-.val-x { color: #ef4444; }
-.val-y { color: #22c55e; }
-.val-z { color: #3b82f6; }
-
-/* Timeline */
-.timeline-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 20px;
-  background: #1a1a1a;
-  flex-shrink: 0;
-}
-
-.timeline-label {
-  font-size: 12px;
-  font-family: monospace;
-  color: #aaa;
-  white-space: nowrap;
-}
-
-.timeline-slider {
-  flex: 1;
-  accent-color: #2563eb;
-  height: 4px;
-}
-
-/* Loading progress bar */
-.load-progress-bar {
-  padding: 14px 20px;
-  background: #1a1a1a;
-  border-top: 1px solid #333;
-  flex-shrink: 0;
-  margin-top: auto;
-}
-
-.load-progress-text {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: #aaa;
-  margin-bottom: 8px;
-}
-
-.load-progress-track {
-  height: 4px;
-  background: #333;
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.load-progress-fill {
-  height: 100%;
-  background: #2563eb;
-  border-radius: 2px;
-  transition: width 0.3s ease;
-}
+/* footer */
+.pb-footer { background:#1e1e1e; border-top:1px solid #333; padding:10px 16px; flex-shrink:0; }
+.pb-timeline { display:flex; align-items:center; gap:12px; margin-bottom:8px; }
+.pb-tl-time { font-size:11px; color:#888; font-family:monospace; white-space:nowrap; }
+.pb-tl-slider { flex:1; accent-color:#2563eb; height:4px; }
+.pb-ctrls { display:flex; justify-content:center; gap:20px; }
+.pb-ctrl { background:#2a2a2a; border:1px solid #444; color:#ccc; padding:6px 18px; border-radius:6px; cursor:pointer; font-size:13px; }
+.pb-ctrl:hover { background:#333; }
+.pb-ctrl-play { background:#2563eb; border-color:#2563eb; color:#fff; font-weight:600; }
+.pb-ctrl-play:hover { background:#1d4ed8; }
+.pb-ctrl:disabled { opacity:.4; cursor:default; }
 </style>
