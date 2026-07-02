@@ -188,7 +188,7 @@
                   <th>sourceKey *</th>
                   <th>名称 *</th>
                   <th>类型 *</th>
-                  <th>设备角色</th>
+                  <th>播放方式</th>
                   <th>必需</th>
                   <th style="width:44px"></th>
                 </tr>
@@ -201,7 +201,12 @@
                     <input v-model="src.sourceType" class="source-input" list="source-type-list" placeholder="video" />
                   </td>
                   <td>
-                    <input v-model="src.deviceRoleCode" class="source-input" list="device-role-list" placeholder="ZED" />
+                    <select v-model="src.playbackKind" class="source-input">
+                      <option value="">不参与播放</option>
+                      <option value="video">video</option>
+                      <option value="imu_curve">imu_curve</option>
+                      <option value="imu">imu</option>
+                    </select>
                   </td>
                   <td style="text-align:center">
                     <input type="checkbox" v-model="src.requiredFlag" />
@@ -302,7 +307,7 @@ interface SourceRow {
   sourceKey: string;
   sourceName: string;
   sourceType: string;
-  deviceRoleCode?: string;
+  playbackKind?: string;
   requiredFlag?: boolean;
 }
 
@@ -348,7 +353,7 @@ function openEditDialog(profile: CollectionProfileResponse) {
     sourceKey: s.sourceKey,
     sourceName: s.sourceName,
     sourceType: s.sourceType,
-    deviceRoleCode: s.deviceRoleCode ?? undefined,
+    playbackKind: s.playbackKind ?? "",
     requiredFlag: s.required,
   }));
   dialogOpen.value = true;
@@ -364,7 +369,7 @@ function addSourceRow() {
     sourceKey: "",
     sourceName: "",
     sourceType: "",
-    deviceRoleCode: "",
+    playbackKind: "",
     requiredFlag: true,
   });
 }
@@ -430,7 +435,7 @@ async function submitDialog() {
         sourceKey: s.sourceKey.trim(),
         sourceName: s.sourceName.trim(),
         sourceType: s.sourceType.trim(),
-        deviceRoleCode: s.deviceRoleCode?.trim() || undefined,
+        playbackKind: s.playbackKind?.trim() || undefined,
         requiredFlag: s.requiredFlag,
       }));
       await createProfile({

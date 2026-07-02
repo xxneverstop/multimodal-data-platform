@@ -33,6 +33,16 @@
         <RouterLink :to="`/sessions?taskId=${detail.task.id}`" class="light2-btn light2-btn-sec">
           查看采集
         </RouterLink>
+        <RouterLink :to="`/acquisition/${detail.task.id}/dag`" class="light2-btn" style="background:#17181a;color:#fff;border-color:#17181a;">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right:2px;">
+            <circle cx="4" cy="4" r="2" fill="currentColor" opacity="0.8"/>
+            <circle cx="12" cy="4" r="2" fill="currentColor" opacity="0.8"/>
+            <circle cx="8" cy="12" r="2" fill="currentColor" opacity="0.8"/>
+            <line x1="5.5" y1="5" x2="7.5" y2="10.5" stroke="currentColor" stroke-width="1.2" opacity="0.6"/>
+            <line x1="10.5" y1="5" x2="8.5" y2="10.5" stroke="currentColor" stroke-width="1.2" opacity="0.6"/>
+          </svg>
+          数据链路图
+        </RouterLink>
       </div>
     </div>
 

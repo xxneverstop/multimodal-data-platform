@@ -30,6 +30,8 @@ import com.honortech.dataplatform.common.storage.StorageRouter;
 import com.honortech.dataplatform.common.util.FileNameUtils;
 import com.honortech.dataplatform.file.entity.DataFile;
 import com.honortech.dataplatform.file.mapper.DataFileMapper;
+import com.honortech.dataplatform.pipeline.entity.PipelineDefinition;
+import com.honortech.dataplatform.pipeline.mapper.PipelineDefinitionMapper;
 import com.honortech.dataplatform.processing.PipelineIds;
 import com.honortech.dataplatform.processing.dto.CreateManualProcessingJobRequest;
 import com.honortech.dataplatform.processing.dto.CreateProcessingJobRequest;
@@ -67,6 +69,7 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
     private final AssetLineageMapper assetLineageMapper;
     private final CollectionSessionMapper sessionMapper;
     private final DataFileMapper dataFileMapper;
+    private final PipelineDefinitionMapper pipelineDefMapper;
     private final StorageRouter storageRouter;
     private final StorageProperties storageProperties;
     private final ObjectMapper objectMapper;
@@ -80,6 +83,7 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
             AssetLineageMapper assetLineageMapper,
             CollectionSessionMapper sessionMapper,
             DataFileMapper dataFileMapper,
+            PipelineDefinitionMapper pipelineDefMapper,
             StorageRouter storageRouter,
             StorageProperties storageProperties,
             ObjectMapper objectMapper) {
@@ -91,6 +95,7 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
         this.assetLineageMapper = assetLineageMapper;
         this.sessionMapper = sessionMapper;
         this.dataFileMapper = dataFileMapper;
+        this.pipelineDefMapper = pipelineDefMapper;
         this.storageRouter = storageRouter;
         this.storageProperties = storageProperties;
         this.objectMapper = objectMapper;
@@ -200,10 +205,16 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
     }
 
     private ProcessingJobResponse toResponse(ProcessingJob job) {
+        String sessionCode = null;
+        if (job.getSessionId() != null) {
+            CollectionSession session = sessionMapper.selectById(job.getSessionId());
+            sessionCode = session != null ? session.getSessionCode() : null;
+        }
         return new ProcessingJobResponse(
                 job.getId(),
                 job.getTaskId(),
                 job.getSessionId(),
+                sessionCode,
                 job.getPipelineId(),
                 job.getExecutorType(),
                 job.getStatus(),
@@ -222,9 +233,13 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
     }
 
     private void validatePipelineId(String pipelineId) {
-        if (!PipelineIds.RGB_MOCAP_ALIGNMENT.equals(pipelineId)
-                && !PipelineIds.BUILD_PLAYBACK.equals(pipelineId)) {
-            throw new BizException("Unsupported pipelineId: " + pipelineId);
+        // 从 pipeline_definition 表校验 pipeline 是否存在且启用
+        PipelineDefinition def = pipelineDefMapper.selectOne(
+                new LambdaQueryWrapper<PipelineDefinition>()
+                        .eq(PipelineDefinition::getPipelineId, pipelineId)
+                        .eq(PipelineDefinition::getEnabled, 1));
+        if (def == null) {
+            throw new BizException("Pipeline not found or disabled: " + pipelineId);
         }
     }
 
@@ -261,6 +276,17 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
                         new LambdaQueryWrapper<ProcessingJob>()
                                 .eq(ProcessingJob::getSessionId, sessionId)
                                 .orderByDesc(ProcessingJob::getCreatedAt))
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Override
+    public List<ProcessingJobResponse> listAllJobs() {
+        return processingJobMapper.selectList(
+                        new LambdaQueryWrapper<ProcessingJob>()
+                                .orderByDesc(ProcessingJob::getCreatedAt)
+                                .last("LIMIT 50"))
                 .stream()
                 .map(this::toResponse)
                 .toList();

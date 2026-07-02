@@ -3,6 +3,7 @@ import type { SessionListPageResponse, SessionListQuery } from "@/types/session"
 import type {
   InitiateImportUploadRequest,
   InitiateImportUploadResponse,
+  DataFileResponse,
 } from "@/types/file";
 
 export interface PlaybackSource {
@@ -140,6 +141,10 @@ export function checkSessionPlayback(sessionId: string, jobId?: number): Promise
   const params: Record<string, any> = {};
   if (jobId != null) params.jobId = jobId;
   return http.get(`/api/sessions/${encodeURIComponent(sessionId)}/playback/check`, { params }) as any;
+}
+
+export function fetchSessionFiles(sessionId: number): Promise<DataFileResponse[]> {
+  return http.get(`/api/sessions/${sessionId}/files`) as any;
 }
 
 export function importSessionPackage(formData: FormData): Promise<SessionImportResponse> {

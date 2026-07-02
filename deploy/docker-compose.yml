@@ -44,6 +44,26 @@ services:
     networks:
       - mmdp-net
 
+  mmdp-worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    image: mmdp-worker:latest
+    container_name: mmdp-worker
+    restart: unless-stopped
+    depends_on:
+      - mmdp-backend
+    environment:
+      MMDP_BACKEND_URL: ${MMDP_BACKEND_URL}
+      MMDP_OSS_ENDPOINT: ${MMDP_OSS_ENDPOINT}
+      MMDP_OSS_ACCESS_KEY_ID: ${MMDP_OSS_ACCESS_KEY_ID}
+      MMDP_OSS_ACCESS_KEY_SECRET: ${MMDP_OSS_ACCESS_KEY_SECRET}
+      MMDP_OSS_BUCKET: ${MMDP_OSS_BUCKET}
+      MMDP_WORKER_WORK_DIR: ${MMDP_WORKER_WORK_DIR:-/tmp/mmdp-worker}
+      MMDP_WORKER_POLL_INTERVAL: ${MMDP_WORKER_POLL_INTERVAL:-5}
+    networks:
+      - mmdp-net
+
   mmdp-nginx:
     image: nginx:1.27-alpine
     container_name: mmdp-nginx

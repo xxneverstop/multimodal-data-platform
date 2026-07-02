@@ -138,8 +138,9 @@ public class CollectionSessionServiceImpl implements CollectionSessionService {
 
     /**
      * 构建回放文件列表：
-     * - 未指定 jobId：返回全部文件（原行为）
-     * - 指定 jobId：返回该 job 的产物（fileRole=PROCESSED_OUTPUT）+ Profile 中 playback_kind 非空的原始文件
+     * - 未指定 jobId：返回全部文件
+     * - 指定 jobId：仅返回该 job 的产物（通过 DataAsset.producedByJobId 精确匹配）
+     *   + Profile 中 playback_kind 非空的原始文件
      */
     private List<DataFile> buildPlaybackFileList(
             List<DataFile> allSessionFiles,
@@ -148,10 +149,21 @@ public class CollectionSessionServiceImpl implements CollectionSessionService {
         if (jobId == null) {
             return allSessionFiles;
         }
-        // 收集 job 产物
+        // 查询该 job 产出的 DataAsset，获取对应的 fileId 集合
+        java.util.Set<Long> jobFileIds = new java.util.HashSet<>();
+        List<DataAsset> jobAssets = dataAssetMapper.selectList(
+                new LambdaQueryWrapper<DataAsset>()
+                        .eq(DataAsset::getProducedByJobId, jobId)
+        );
+        for (DataAsset asset : jobAssets) {
+            if (asset.getFileId() != null) {
+                jobFileIds.add(asset.getFileId());
+            }
+        }
+        // 收集该 job 的产物文件
         List<DataFile> result = new ArrayList<>();
         for (DataFile f : allSessionFiles) {
-            if ("PROCESSED_OUTPUT".equals(f.getFileRole())) {
+            if ("PROCESSED_OUTPUT".equals(f.getFileRole()) && jobFileIds.contains(f.getId())) {
                 result.add(f);
             }
         }
@@ -164,7 +176,7 @@ public class CollectionSessionServiceImpl implements CollectionSessionService {
         }
         for (DataFile f : allSessionFiles) {
             if ("PROCESSED_OUTPUT".equals(f.getFileRole())) {
-                continue; // 已经加过了
+                continue;
             }
             if (f.getSourceKey() != null && playableKeys.contains(f.getSourceKey().toLowerCase())) {
                 result.add(f);

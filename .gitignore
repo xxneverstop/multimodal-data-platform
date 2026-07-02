@@ -37,3 +37,4 @@ mmdp-backend/.m2/
 deploy/.env
 deploy/backend/*.jar
 deploy/frontend/dist/
+deploy/worker/src/

@@ -41,12 +41,12 @@ export const uploadWorkspaceState = {
   uploadError: ref(false),
   batchSessionId: ref<number | null>(null),
   batchSessionCode: ref(""),
-  activeIngestMode: ref<IngestModeKey>("files"),
+  activeIngestMode: ref<IngestModeKey>("archive"),
   externalPreviewItems: ref<ExternalPreviewItem[]>([]),
   form: reactive({
     taskId: "",
     sessionId: "",
-    uploadMode: "files" as "files" | "archive",
+    uploadMode: "archive" as "files" | "archive",
     selectedFiles: [] as File[],
     archiveFiles: [] as File[],
     remark: "",
@@ -94,7 +94,7 @@ export function clearWorkspace(options?: {
   uploadWorkspaceState.form.archiveFiles = [];
   uploadWorkspaceState.form.remark = "";
 
-  uploadWorkspaceState.activeIngestMode.value = "files";
+  uploadWorkspaceState.activeIngestMode.value = "archive";
   uploadWorkspaceState.externalPreviewItems.value = [];
   Object.assign(uploadWorkspaceState.externalDraftForm, defaultExternalDraftForm());
 

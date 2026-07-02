@@ -25,6 +25,8 @@ public class ProcessingJob {
     private String toolVersion;
     private String logPath;
     private String remark;
+    /** 依赖的前置Job ID列表，JSON数组如 [1,2]；为空表示无前置依赖 */
+    private String dependsOnJobIds;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -146,6 +148,14 @@ public class ProcessingJob {
 
     public void setRemark(String remark) {
         this.remark = remark;
+    }
+
+    public String getDependsOnJobIds() {
+        return dependsOnJobIds;
+    }
+
+    public void setDependsOnJobIds(String dependsOnJobIds) {
+        this.dependsOnJobIds = dependsOnJobIds;
     }
 
     public LocalDateTime getCreatedAt() {

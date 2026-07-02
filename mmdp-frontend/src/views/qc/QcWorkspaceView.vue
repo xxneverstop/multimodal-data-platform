@@ -9,6 +9,8 @@
       <button v-if="activeTab === 'rules'" class="light2-btn light2-btn-primary" @click="dialogOpen = true">+ 新建规则</button>
     </div>
 
+    <hr class="light2-divider" />
+
     <!-- tabs -->
     <div class="tab-bar" style="margin-bottom:16px">
       <button v-for="t in tabs" :key="t.value" class="tab-bar-item" :class="activeTab === t.value ? 'tab-bar-item-active' : ''" @click="activeTab = t.value">{{ t.label }}</button>

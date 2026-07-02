@@ -7,6 +7,8 @@ import com.honortech.dataplatform.processing.dto.CreateSessionJobRequest;
 import com.honortech.dataplatform.processing.dto.ManualProcessingJobResponse;
 import com.honortech.dataplatform.processing.dto.ProcessingJobResponse;
 import com.honortech.dataplatform.processing.dto.TaskLineageResponse;
+import com.honortech.dataplatform.processing.dto.ExecutionGraphResponse;
+import com.honortech.dataplatform.processing.service.ExecutionGraphService;
 import com.honortech.dataplatform.processing.service.ProcessingJobService;
 import com.honortech.dataplatform.processing.service.TaskLineageService;
 import jakarta.validation.Valid;
@@ -26,10 +28,14 @@ public class ProcessingJobController {
 
     private final ProcessingJobService processingJobService;
     private final TaskLineageService taskLineageService;
+    private final ExecutionGraphService executionGraphService;
 
-    public ProcessingJobController(ProcessingJobService processingJobService, TaskLineageService taskLineageService) {
+    public ProcessingJobController(ProcessingJobService processingJobService,
+                                   TaskLineageService taskLineageService,
+                                   ExecutionGraphService executionGraphService) {
         this.processingJobService = processingJobService;
         this.taskLineageService = taskLineageService;
+        this.executionGraphService = executionGraphService;
     }
 
     @PostMapping("/api/tasks/{taskId}/processing-jobs")
@@ -56,6 +62,11 @@ public class ProcessingJobController {
         return ApiResponse.success(taskLineageService.getTaskLineage(taskId));
     }
 
+    @GetMapping("/api/processing-jobs")
+    public ApiResponse<List<ProcessingJobResponse>> listAllJobs() {
+        return ApiResponse.success(processingJobService.listAllJobs());
+    }
+
     @GetMapping("/api/processing-jobs/{jobId}")
     public ApiResponse<ProcessingJobResponse> getJob(@PathVariable Long jobId) {
         return ApiResponse.success(processingJobService.getJob(jobId));
@@ -72,5 +83,15 @@ public class ProcessingJobController {
     @GetMapping("/api/sessions/{sessionId}/processing-jobs")
     public ApiResponse<List<ProcessingJobResponse>> listSessionJobs(@PathVariable Long sessionId) {
         return ApiResponse.success(processingJobService.listJobsBySessionId(sessionId));
+    }
+
+    @GetMapping("/api/tasks/{taskId}/execution-graph")
+    public ApiResponse<ExecutionGraphResponse> getTaskExecutionGraph(@PathVariable Long taskId) {
+        return ApiResponse.success(executionGraphService.getTaskExecutionGraph(taskId));
+    }
+
+    @GetMapping("/api/sessions/{sessionId}/execution-graph")
+    public ApiResponse<ExecutionGraphResponse> getSessionExecutionGraph(@PathVariable Long sessionId) {
+        return ApiResponse.success(executionGraphService.getSessionExecutionGraph(sessionId));
     }
 }

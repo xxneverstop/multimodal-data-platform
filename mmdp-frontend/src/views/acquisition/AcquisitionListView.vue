@@ -9,32 +9,29 @@
       <button class="light2-btn light2-btn-primary" @click="dialogOpen = true">+ 新建任务</button>
     </div>
 
-    <!-- metrics -->
-    <div class="light2-metrics">
-      <div v-for="m in metricItems" :key="m.label" class="light2-mcard">
-        <div class="light2-mstripe" :style="{ background: m.tone === 'task' ? 'var(--color-brand-500)' : m.tone === 'session' ? '#0d9444' : m.tone === 'asset' ? '#7c3aed' : '#e3740a' }" />
-        <div class="light2-mlabel">{{ m.label }}</div>
-        <div class="light2-mvalue">{{ m.value }}</div>
+    <hr class="light2-divider" />
+
+    <!-- filters -->
+    <div class="light2-filters" style="flex-direction:column;align-items:stretch;gap:10px">
+      <!-- 第一行 -->
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input v-model="listQuery.taskNumber" type="text" placeholder="任务编号" class="light2-input" style="max-width:140px;flex:none" @keyup.enter="applyQuery" />
+        <input v-model="listQuery.keyword" type="text" placeholder="任务名称" class="light2-input" style="max-width:180px;flex:none" @keyup.enter="applyQuery" />
+        <input v-model="listQuery.profileKeyword" type="text" placeholder="配置 / Profile" class="light2-input" style="max-width:160px;flex:none" @keyup.enter="applyQuery" />
+        <input v-model="listQuery.collectDateFrom" type="date" class="light2-input" style="max-width:140px;flex:none" />
+        <span style="color:var(--color-text-tertiary);font-size:12px">至</span>
+        <input v-model="listQuery.collectDateTo" type="date" class="light2-input" style="max-width:140px;flex:none" />
+        <button class="light2-btn light2-btn-primary light2-btn-sm" @click="applyQuery">搜索</button>
+        <button class="light2-btn light2-btn-sec light2-btn-sm" @click="resetQuery">重置</button>
+      </div>
+      <!-- 第二行：状态快捷 chip -->
+      <div class="chip-group">
+        <button class="chip-item" :class="!listQuery.status ? 'chip-item-active' : ''" @click="listQuery.status = ''; applyQuery()">全部</button>
+        <button v-for="o in statusOptions" :key="o.value" class="chip-item" :class="listQuery.status === o.value ? 'chip-item-active' : ''" @click="listQuery.status = listQuery.status === o.value ? '' : o.value; applyQuery()">{{ o.label }}</button>
       </div>
     </div>
 
-    <!-- filters -->
-    <div class="light2-filters">
-      <input v-model="listQuery.keyword" type="text" placeholder="搜索任务编号 / 名称 / 被试..." class="light2-input" @keyup.enter="applyQuery" />
-      <div class="light2-sel">
-        <select v-model="listQuery.status" @change="applyQuery">
-          <option value="">全部状态</option>
-          <option v-for="o in statusOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
-        </select>
-      </div>
-      <div class="light2-sel">
-        <select v-model="sortState.field" @change="updateSortField(sortState.field)">
-          <option v-for="o in sortOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
-        </select>
-      </div>
-      <button class="light2-btn light2-btn-primary light2-btn-sm" @click="applyQuery">搜索</button>
-      <button class="light2-btn light2-btn-sec light2-btn-sm" @click="resetQuery">重置</button>
-    </div>
+    <hr class="light2-divider" />
 
     <!-- table -->
     <div class="light2-tbl overflow-x-auto">
@@ -85,6 +82,7 @@
               <div class="light2-actions">
                 <RouterLink :to="`/sessions?taskId=${task.id}`" class="light2-btn light2-btn-sec light2-btn-sm">查看采集</RouterLink>
                 <RouterLink :to="`/acquisition/${task.id}`" class="light2-btn light2-btn-sec light2-btn-sm">详情</RouterLink>
+                <button v-if="authStore.isAdmin.value" class="light2-btn light2-btn-sec light2-btn-sm" style="color:#c5222f;border-color:#fecdd3" @click="openDeleteTaskDialog(task)">删除</button>
               </div>
             </td>
           </tr>
@@ -139,6 +137,22 @@
       </div>
       <p v-if="message" class="mt-3 text-sm text-[var(--color-text-secondary)]">{{ message }}</p>
     </AppDialog>
+
+    <!-- 删除确认对话框 -->
+    <AppDialog
+      :open="deleteDialogOpen"
+      title="删除采集任务"
+      :description="`将永久删除任务「${deleteTarget?.taskName ?? ''}」及其下所有采集会话、文件、资产和 OSS 数据，不可恢复。`"
+      confirm-text="确认删除"
+      :loading="deleteSubmitting"
+      @close="deleteDialogOpen = false"
+      @confirm="handleDeleteTask"
+    >
+      <div class="rounded-[10px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        此操作不可逆！将删除该任务下的所有会话（共 {{ deleteTarget?.sessionCount ?? 0 }} 个）及其全部关联数据。
+      </div>
+      <p v-if="deleteMessage" class="mt-3 text-sm text-[var(--color-text-secondary)]">{{ deleteMessage }}</p>
+    </AppDialog>
   </div>
 </template>
 
@@ -148,6 +162,8 @@ import { RouterLink, useRouter } from "vue-router";
 import { fetchCollectionProfiles, type CollectionProfileResponse } from "@/api/profiles";
 import { fetchSessions } from "@/api/sessions";
 import { createTask, fetchTasks } from "@/api/tasks";
+import { deleteTask } from "@/api/admin";
+import { useAuthStore } from "@/stores/auth";
 import AppDialog from "@/components/AppDialog.vue";
 import type { SessionListItem } from "@/types/session";
 import type { CreateTaskRequest, TaskResponse } from "@/types/task";
@@ -156,6 +172,7 @@ import { formatDateTime, formatStatusLabel } from "@/utils/format";
 type TaskListQueryState = {
   keyword: string;
   taskNumber: string;
+  profileKeyword: string;
   status: string;
   subjectCode: string;
   actionName: string;
@@ -169,6 +186,7 @@ type TaskSortState = {
 };
 
 const router = useRouter();
+const authStore = useAuthStore();
 
 const rawList = ref<TaskResponse[]>([]);
 const metricSessions = ref<SessionListItem[]>([]);
@@ -301,6 +319,7 @@ function createDefaultQuery(): TaskListQueryState {
   return {
     keyword: "",
     taskNumber: "",
+    profileKeyword: "",
     status: "",
     subjectCode: "",
     actionName: "",
@@ -321,12 +340,13 @@ function syncAppliedQuery() {
 function matchesTaskQuery(task: TaskResponse, query: TaskListQueryState) {
   const keyword = query.keyword.trim().toLowerCase();
   const taskNumber = query.taskNumber.trim().toLowerCase();
+  const profileKeyword = query.profileKeyword.trim().toLowerCase();
   const subjectCode = query.subjectCode.trim().toLowerCase();
   const actionName = query.actionName.trim().toLowerCase();
 
   const matchesKeyword =
     !keyword ||
-    [task.taskName, task.subjectCode, task.actionName, task.profileName || "", task.taskCode || ""]
+    [task.taskName, task.subjectCode, task.actionName, task.taskCode || ""]
       .some((value) => String(value).toLowerCase().includes(keyword));
 
   const matchesTaskNumber =
@@ -334,13 +354,17 @@ function matchesTaskQuery(task: TaskResponse, query: TaskListQueryState) {
     String(task.id).toLowerCase() === taskNumber ||
     String(task.taskCode || "").toLowerCase() === taskNumber;
 
+  const matchesProfile =
+    !profileKeyword ||
+    String(task.profileName || "").toLowerCase().includes(profileKeyword);
+
   const matchesStatus = !query.status || task.status === query.status;
   const matchesSubject = !subjectCode || String(task.subjectCode || "").toLowerCase().includes(subjectCode);
   const matchesAction = !actionName || String(task.actionName || "").toLowerCase().includes(actionName);
   const matchesFrom = !query.collectDateFrom || String(task.collectDate || "") >= query.collectDateFrom;
   const matchesTo = !query.collectDateTo || String(task.collectDate || "") <= query.collectDateTo;
 
-  return matchesKeyword && matchesTaskNumber && matchesStatus && matchesSubject && matchesAction && matchesFrom && matchesTo;
+  return matchesKeyword && matchesTaskNumber && matchesProfile && matchesStatus && matchesSubject && matchesAction && matchesFrom && matchesTo;
 }
 
 function sortTaskList(list: TaskResponse[], state: TaskSortState) {
@@ -443,6 +467,35 @@ function updatePage(page: number) {
 function closeDialog() {
   dialogOpen.value = false;
   message.value = "";
+}
+
+// ── 删除任务 ──
+const deleteDialogOpen = ref(false);
+const deleteTarget = ref<TaskResponse | null>(null);
+const deleteSubmitting = ref(false);
+const deleteMessage = ref("");
+
+function openDeleteTaskDialog(task: TaskResponse) {
+  deleteTarget.value = task;
+  deleteMessage.value = "";
+  deleteDialogOpen.value = true;
+}
+
+async function handleDeleteTask() {
+  if (!deleteTarget.value) return;
+  deleteSubmitting.value = true;
+  deleteMessage.value = "";
+  try {
+    const result = await deleteTask(deleteTarget.value.id);
+    deleteMessage.value = result.summary;
+    deleteDialogOpen.value = false;
+    deleteTarget.value = null;
+    await loadTasks();
+  } catch (e) {
+    deleteMessage.value = e instanceof Error ? e.message : "删除失败";
+  } finally {
+    deleteSubmitting.value = false;
+  }
 }
 
 async function handleCreate() {

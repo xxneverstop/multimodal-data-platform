@@ -32,7 +32,8 @@
       </div>
 
       <div class="light2-actions">
-        <a v-if="playbackReady" :href="`/play/${detail.session.sessionId}`" target="_blank" class="light2-btn light2-btn-primary" style="text-decoration:none">数据回放</a>
+        <a v-if="hasMotionViewerData" :href="`/motion-view/${detail.session.id}`" target="_blank" class="light2-btn light2-btn-primary" style="text-decoration:none">3D 动作查看</a>
+        <a v-if="playbackReady" :href="`/play/${detail.session.sessionId}`" target="_blank" class="light2-btn" style="text-decoration:none;background:var(--color-brand-500);color:#fff;border-radius:8px;padding:7px 17px;font-size:13px;font-weight:600">数据回放</a>
         <BaseButton v-else variant="soft" tone="session" disabled title="当前数据不满足播放规则，请先执行处理任务">数据回放</BaseButton>
         <BaseButton :to="`/export?sessionId=${detail.session.sessionId}`" variant="secondary" tone="export">
           查看导出
@@ -55,7 +56,7 @@
         <section class="light2-panel">
           <div class="light2-panel-hdr">
             <span class="light2-panel-title">原始资产</span>
-            <span class="light2-panel-sub">{{ rawAssets.length }} 资产</span>
+            <span class="light2-panel-sub">{{ rawAssets.length }} 资产 · {{ sessionFiles.length }} 文件</span>
           </div>
 
           <div v-if="!rawAssets.length" class="light2-empty-state">
@@ -63,20 +64,41 @@
           </div>
 
           <div v-else>
-            <article v-for="asset in rawAssets" :key="asset.id" class="light2-asset-row">
+            <article v-for="asset in rawAssets" :key="asset.id" class="light2-asset-row" :class="{ 'light2-asset-row-expanded': expandedAssets.has(asset.id) }">
               <div class="light2-asset-row-icon">{{ assetGlyph(asset) }}</div>
-              <div class="light2-asset-row-info">
+              <div class="light2-asset-row-info" style="cursor:pointer;flex:1" @click="toggleAssetFiles(asset)">
                 <div class="light2-asset-row-name">{{ asset.fileName || asset.assetName }}</div>
                 <div class="light2-asset-row-meta">
                   <span>{{ asset.fileFormat || "-" }}</span>
                   <span>{{ asset.assetType || "-" }}</span>
                   <span>{{ formatFileSize(asset.fileSize) }}</span>
+                  <span v-if="assetFileCount(asset) > 0" class="light2-badge light2-badge-neutral" style="margin-left:4px">{{ assetFileCount(asset) }} 文件</span>
                 </div>
               </div>
               <div class="light2-asset-row-actions">
+                <button class="light2-file-expand-btn" :title="expandedAssets.has(asset.id) ? '收起文件列表' : '展开文件列表'" @click="toggleAssetFiles(asset)">
+                  <span v-if="expandedAssets.has(asset.id)">▲</span>
+                  <span v-else>▼</span>
+                </button>
                 <BaseButton :to="`/data/${asset.id}?taskId=${detail.task?.id ?? detail.session.taskId}`" variant="ghost" tone="asset" size="sm">详情</BaseButton>
               </div>
             </article>
+            <!-- 展开的文件明细 -->
+            <div v-for="asset in rawAssets" :key="'files-'+asset.id">
+              <div v-if="expandedAssets.has(asset.id)" class="light2-file-detail-list">
+                <div v-if="!filesBySourceKey[asset.sourceKey || asset.rawAsset?.sourceKey || '']?.length" class="light2-file-detail-empty">
+                  暂无关联文件记录
+                </div>
+                <article v-for="f in filesBySourceKey[asset.sourceKey || asset.rawAsset?.sourceKey || '']" :key="f.id" class="light2-file-detail-row">
+                  <span class="light2-file-detail-name" :title="f.originalFilename">{{ f.originalFilename }}</span>
+                  <span class="light2-file-detail-ext">{{ f.fileExt || "-" }}</span>
+                  <span class="light2-file-detail-size">{{ formatFileSize(f.fileSize) }}</span>
+                  <span class="light2-file-detail-status">
+                    <span class="light2-badge" :class="f.uploadStatus==='UPLOADED'?'light2-badge-ok':'light2-badge-warn'">{{ f.uploadStatus }}</span>
+                  </span>
+                </article>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -84,10 +106,13 @@
         <section class="light2-panel" v-for="pg in processedGroups" :key="'pg-'+pg.jobId">
           <div class="light2-panel-hdr">
             <span class="light2-panel-title">处理产物 · Job #{{ pg.jobId }} · {{ pg.pipelineId }}</span>
-            <span class="light2-panel-sub">
-              <span class="light2-badge" :class="pg.status==='SUCCESS'?'light2-badge-ok':pg.status==='FAILED'?'light2-badge-err':'light2-badge-warn'"><span class="light2-bdot" :style="{background:pg.status==='SUCCESS'?'#0d9444':pg.status==='FAILED'?'#d92d20':'#b87a0a'}"/>{{ pg.status }}</span>
-              {{ pg.assets.length }} 个产物
-            </span>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="light2-panel-sub">
+                <span class="light2-badge" :class="pg.status==='SUCCESS'?'light2-badge-ok':pg.status==='FAILED'?'light2-badge-err':'light2-badge-warn'"><span class="light2-bdot" :style="{background:pg.status==='SUCCESS'?'#0d9444':pg.status==='FAILED'?'#d92d20':'#b87a0a'}"/>{{ pg.status }}</span>
+                {{ pg.assets.length }} 个产物
+              </span>
+              <button v-if="authStore.isAdmin.value" class="light2-btn light2-btn-sec light2-btn-sm" style="color:#c5222f;border-color:#fecdd3" @click="openDeleteJobDialog(pg.jobId, pg.pipelineId)">清除产出</button>
+            </div>
           </div>
           <article v-for="asset in pg.assets" :key="asset.id" class="light2-asset-row">
             <div class="light2-asset-row-icon">{{ assetGlyph(asset) }}</div>
@@ -120,12 +145,16 @@
               <div class="light2-job-duration"></div>
               <div class="light2-job-status">
                 <button class="light2-btn light2-btn-primary light2-btn-sm" @click="executePipeline(p)" :disabled="executingPipelineId === p.pipelineId">
-                  {{ executingPipelineId === p.pipelineId ? '创建中...' : '执行' }}
+                  {{ executingPipelineId === p.pipelineId ? '提交中...' : '提交处理任务' }}
                 </button>
               </div>
             </article>
           </div>
           <p v-if="executeError" style="color:#d92d20;font-size:12px;margin-top:8px">{{ executeError }}</p>
+          <p v-if="executeSuccess" style="color:#0d9444;font-size:12px;margin-top:8px">
+            任务已提交！
+            <RouterLink to="/processing" style="color:#2563eb;text-decoration:underline">查看处理状态 →</RouterLink>
+          </p>
         </section>
 
         <section class="light2-panel">
@@ -216,6 +245,22 @@
   <div v-else class="light2-page">
     <div class="light2-empty-state">正在加载采集详情...</div>
   </div>
+
+  <!-- 删除 Job 产出确认对话框 -->
+  <AppDialog
+    :open="deleteJobDialogOpen"
+    title="清除处理产出"
+    :description="`将永久删除处理任务 #${deleteJobTargetId ?? ''}（${deleteJobTargetPipeline ?? ''}）生成的所有派生文件和资产，不可恢复。`"
+    confirm-text="确认清除"
+    :loading="deleteJobSubmitting"
+    @close="deleteJobDialogOpen = false"
+    @confirm="handleDeleteJobOutputs"
+  >
+    <div class="rounded-[10px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+      此操作不可逆！只清除该处理任务的产出（派生文件+资产），不影响原始采集数据。
+    </div>
+    <p v-if="deleteJobMessage" class="mt-3 text-sm text-[var(--color-text-secondary)]">{{ deleteJobMessage }}</p>
+  </AppDialog>
 </template>
 
 <script setup lang="ts">
@@ -224,16 +269,57 @@ import { RouterLink, useRoute } from "vue-router";
 import { fetchSessionDetail } from "@/api/platform";
 import { fetchAvailablePipelines } from "@/api/pipelines";
 import { createSessionJob, fetchSessionJobs } from "@/api/processing";
-import { checkSessionPlayback } from "@/api/sessions";
+import { checkSessionPlayback, fetchSessionFiles } from "@/api/sessions";
+import { deleteJobOutputs } from "@/api/admin";
+import { useAuthStore } from "@/stores/auth";
+import AppDialog from "@/components/AppDialog.vue";
 import BaseButton from "@/components/BaseButton.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 import type { AssetListItem, SessionDataGroup, SessionDetailViewModel } from "@/types/platform";
 import type { PipelineDefinitionResponse } from "@/types/pipeline";
 import type { ProcessingJobResponse } from "@/types/processing";
+import type { DataFileResponse } from "@/types/file";
 import { formatDateTime, formatFileSize, formatStatusLabel } from "@/utils/format";
 
 const route = useRoute();
+const authStore = useAuthStore();
 const detail = ref<SessionDetailViewModel | null>(null);
+
+// ── 删除 Job 产出 ──
+const deleteJobDialogOpen = ref(false);
+const deleteJobTargetId = ref<number | null>(null);
+const deleteJobTargetPipeline = ref("");
+const deleteJobSubmitting = ref(false);
+const deleteJobMessage = ref("");
+
+function openDeleteJobDialog(jobId: number, pipelineId: string) {
+  deleteJobTargetId.value = jobId;
+  deleteJobTargetPipeline.value = pipelineId;
+  deleteJobMessage.value = "";
+  deleteJobDialogOpen.value = true;
+}
+
+async function handleDeleteJobOutputs() {
+  if (!deleteJobTargetId.value) return;
+  deleteJobSubmitting.value = true;
+  deleteJobMessage.value = "";
+  try {
+    const result = await deleteJobOutputs(deleteJobTargetId.value);
+    deleteJobMessage.value = result.summary;
+    deleteJobDialogOpen.value = false;
+    deleteJobTargetId.value = null;
+    // 重新加载详情
+    const sessionId = Number(route.params.sessionId);
+    if (sessionId) {
+      detail.value = await fetchSessionDetail(sessionId);
+      await loadProcessingData(sessionId);
+    }
+  } catch (e) {
+    deleteJobMessage.value = e instanceof Error ? e.message : "删除失败";
+  } finally {
+    deleteJobSubmitting.value = false;
+  }
+}
 const expandedGroupKeys = ref<string[]>([]);
 const assetPreviewLimit = 8;
 
@@ -243,6 +329,36 @@ const sessionJobs = ref<ProcessingJobResponse[]>([]);
 const executingPipelineId = ref<string | null>(null);
 const playbackReady = ref(false);            // Session 级别：原始+全部产物是否满足播放规则
 const executeError = ref("");
+const executeSuccess = ref(false);
+
+// ── DataFile 展开列表 ──
+const sessionFiles = ref<DataFileResponse[]>([]);
+const expandedAssets = ref<Set<number>>(new Set());
+
+const filesBySourceKey = computed(() => {
+  const map: Record<string, DataFileResponse[]> = {};
+  for (const f of sessionFiles.value) {
+    const key = f.sourceKey || "";
+    if (!map[key]) map[key] = [];
+    map[key].push(f);
+  }
+  return map;
+});
+
+function assetFileCount(asset: AssetListItem): number {
+  const key = asset.sourceKey || asset.rawAsset?.sourceKey || "";
+  return filesBySourceKey.value[key]?.length ?? 0;
+}
+
+function toggleAssetFiles(asset: AssetListItem) {
+  const s = new Set(expandedAssets.value);
+  if (s.has(asset.id)) {
+    s.delete(asset.id);
+  } else {
+    s.add(asset.id);
+  }
+  expandedAssets.value = s;
+}
 
 async function loadProcessingData(sessionId: number) {
   try { availablePipelines.value = await fetchAvailablePipelines(sessionId); } catch { availablePipelines.value = []; }
@@ -258,11 +374,10 @@ async function executePipeline(p: PipelineDefinitionResponse) {
   if (!sid) return;
   executingPipelineId.value = p.pipelineId;
   executeError.value = "";
+  executeSuccess.value = false;
   try {
-    // sessionId 是数据库主键 id，从路由参数或 detail 中获取
-    // 注意: detail.session.sessionId 是 session 的业务标识（如 fake_session_001_final），不是数据库主键
-    // 需要通过 detail.session.id 获取主键
     await createSessionJob(detail.value!.session.id!, { pipelineId: p.pipelineId });
+    executeSuccess.value = true;
     await loadProcessingData(detail.value!.session.id!);
   } catch (e: any) {
     executeError.value = e?.message || "创建处理任务失败";
@@ -592,6 +707,14 @@ function showDownload(asset: AssetListItem) {
   return Boolean(asset.rawAsset.storageUrl) && !isPlayableAsset(asset);
 }
 
+function isMotionViewable(asset: AssetListItem) {
+  return asset.assetType === "MOTION_VIEWER_JSON";
+}
+
+const hasMotionViewerData = computed(() =>
+  sessionFiles.value.some(f => f.assetType === "MOTION_VIEWER_JSON")
+);
+
 function isGroupExpanded(key: string) {
   return expandedGroupKeys.value.includes(key);
 }
@@ -612,8 +735,10 @@ function visibleAssets(group: SessionDataGroup) {
 async function loadDetail() {
   detail.value = await fetchSessionDetail(String(route.params.sessionId));
   expandedGroupKeys.value = [];
+  expandedAssets.value = new Set();
   if (detail.value?.session?.id) {
     loadProcessingData(detail.value.session.id);
+    try { sessionFiles.value = await fetchSessionFiles(detail.value.session.id); } catch { sessionFiles.value = []; }
   }
 }
 

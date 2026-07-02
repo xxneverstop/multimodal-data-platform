@@ -28,6 +28,17 @@ export interface CreatePipelineRequest {
   profileIds?: number[];
 }
 
+/** Worker 端注册的 Pipeline 元数据（来自 GET /api/pipelines/worker-available） */
+export interface WorkerPipelineInfo {
+  pipelineId: string;
+  displayName: string;
+  description?: string;
+  version: string;
+  inputAssetTypes: string[];
+  outputAssetTypes: string[];
+  runtimeDependencies?: string[];
+}
+
 // 所有支持的 AssetType 列表（用于多选）
 export const ASSET_TYPE_OPTIONS: AssetType[] = [
   "RGB_SEQ_RAW",
@@ -42,5 +53,9 @@ export const ASSET_TYPE_OPTIONS: AssetType[] = [
   "FRAME_TIMESTAMPS_CSV",
   "DEPTH_RAW",
   "POSE_CACHE",
+  "SESSION_ARCHIVE_ZIP",
+  "IMU_ALIGNED_CSV",
+  "ALIGNMENT_REPORT",
+  "QC_SUMMARY",
   "OTHER",
 ];

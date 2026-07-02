@@ -17,6 +17,8 @@ public interface PipelineDefinitionService {
 
     void disablePipeline(Long id);
 
+    void enablePipeline(Long id);
+
     /** 根据 session 的 profile + 已有资产，返回可用的 pipeline */
     List<PipelineDefinitionResponse> getAvailablePipelines(Long sessionId);
 }

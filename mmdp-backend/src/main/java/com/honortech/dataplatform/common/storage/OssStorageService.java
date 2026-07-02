@@ -159,6 +159,15 @@ public class OssStorageService implements StorageService {
         );
     }
 
+    @Override
+    public void deleteObject(String bucketName, String objectKey) {
+        try {
+            getClient().deleteObject(bucketName, objectKey);
+        } catch (Exception exception) {
+            throw new BizException("Failed to delete file from OSS: " + objectKey, exception);
+        }
+    }
+
     private String buildStorageUrl(String objectKey) {
         return "oss://" + properties.getOss().getBucket() + "/" + objectKey;
     }

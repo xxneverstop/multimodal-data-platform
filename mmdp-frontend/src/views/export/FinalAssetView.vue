@@ -8,6 +8,8 @@
       </div>
     </div>
 
+    <hr class="light2-divider" />
+
     <!-- chips -->
     <div class="chip-group" style="margin-bottom:14px">
       <button class="chip-item" :class="quickFilter === '' ? 'chip-item-active' : ''" @click="quickFilter = ''">全部</button>

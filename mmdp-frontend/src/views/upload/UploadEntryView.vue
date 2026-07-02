@@ -424,16 +424,16 @@ const {
 
 const ingestModeOptions = [
   {
-    key: "files" as IngestModeKey,
-    title: "普通文件上传",
-    activeClass: "border-[var(--color-brand-500)] bg-[var(--color-brand-50)] text-[var(--color-brand-700)]",
-    inactiveClass: "border-[var(--color-border-default)] bg-white text-[var(--color-text-secondary)] hover:border-[var(--color-brand-200)]",
-  },
-  {
     key: "archive" as IngestModeKey,
     title: "标准 Session 目录导入",
     activeClass: "border-amber-400 bg-amber-50 text-amber-800",
     inactiveClass: "border-[var(--color-border-default)] bg-white text-[var(--color-text-secondary)] hover:border-amber-200",
+  },
+  {
+    key: "files" as IngestModeKey,
+    title: "普通文件上传",
+    activeClass: "border-[var(--color-brand-500)] bg-[var(--color-brand-50)] text-[var(--color-brand-700)]",
+    inactiveClass: "border-[var(--color-border-default)] bg-white text-[var(--color-text-secondary)] hover:border-[var(--color-brand-200)]",
   },
   {
     key: "external" as IngestModeKey,

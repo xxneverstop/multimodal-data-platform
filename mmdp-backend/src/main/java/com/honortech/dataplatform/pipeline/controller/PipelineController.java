@@ -3,7 +3,9 @@ package com.honortech.dataplatform.pipeline.controller;
 import com.honortech.dataplatform.common.api.ApiResponse;
 import com.honortech.dataplatform.pipeline.dto.CreatePipelineRequest;
 import com.honortech.dataplatform.pipeline.dto.PipelineDefinitionResponse;
+import com.honortech.dataplatform.pipeline.dto.WorkerPipelineInfo;
 import com.honortech.dataplatform.pipeline.service.PipelineDefinitionService;
+import com.honortech.dataplatform.processing.service.WorkerManifestService;
 import jakarta.validation.Valid;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -23,9 +25,12 @@ import java.util.List;
 public class PipelineController {
 
     private final PipelineDefinitionService pipelineDefinitionService;
+    private final WorkerManifestService manifestService;
 
-    public PipelineController(PipelineDefinitionService pipelineDefinitionService) {
+    public PipelineController(PipelineDefinitionService pipelineDefinitionService,
+                              WorkerManifestService manifestService) {
         this.pipelineDefinitionService = pipelineDefinitionService;
+        this.manifestService = manifestService;
     }
 
     @GetMapping
@@ -59,9 +64,21 @@ public class PipelineController {
         return ApiResponse.success("Pipeline已禁用", null);
     }
 
+    @PutMapping("/{id}/enable")
+    public ApiResponse<Void> enablePipeline(@PathVariable Long id) {
+        pipelineDefinitionService.enablePipeline(id);
+        return ApiResponse.success("Pipeline已启用", null);
+    }
+
     @GetMapping("/available/{sessionId}")
     public ApiResponse<List<PipelineDefinitionResponse>> getAvailablePipelines(
             @PathVariable Long sessionId) {
         return ApiResponse.success(pipelineDefinitionService.getAvailablePipelines(sessionId));
+    }
+
+    /** 获取 Worker 端 Pipeline 清单（直接读取 pipeline-manifest.json，供前端下拉选择） */
+    @GetMapping("/worker-available")
+    public ApiResponse<List<WorkerPipelineInfo>> getWorkerAvailablePipelines() {
+        return ApiResponse.success(manifestService.getAvailablePipelines());
     }
 }

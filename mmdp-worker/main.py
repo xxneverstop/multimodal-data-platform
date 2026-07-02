@@ -15,7 +15,36 @@ from config import (
     BACKEND_URL, OSS_ENDPOINT, OSS_ACCESS_KEY_ID, OSS_ACCESS_KEY_SECRET,
     OSS_BUCKET, WORK_DIR, POLL_INTERVAL, OUTPUT_PREFIX, validate
 )
-from pipelines import PIPELINES
+from pipelines import PIPELINES, get_manifest
+
+# manifest 文件路径
+MANIFEST_PATH = os.path.join(os.path.dirname(__file__), "pipeline-manifest.json")
+
+
+def generate_manifest():
+    """生成 pipeline-manifest.json，供后端/前端发现 Worker 支持的 Pipeline"""
+    manifest = get_manifest()
+    try:
+        with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
+            json.dump(manifest, f, ensure_ascii=False, indent=2)
+        print(f"[manifest] 已生成 {MANIFEST_PATH} ({len(manifest)} 个 Pipeline)")
+    except Exception as e:
+        print(f"[manifest] [WARN] 写入失败: {e}")
+
+
+def print_registered_pipelines():
+    """启动时打印已注册的 Pipeline 列表"""
+    if not PIPELINES:
+        print("  [WARN] 未发现任何 Pipeline!")
+        return
+    print(f"  已注册 {len(PIPELINES)} 个 Pipeline:")
+    for pid, instance in PIPELINES.items():
+        cls = type(instance)
+        name = getattr(cls, "display_name", "") or pid
+        ver = getattr(cls, "version", "")
+        deps = getattr(cls, "runtime_dependencies", [])
+        dep_str = f" (依赖: {', '.join(deps)})" if deps else ""
+        print(f"    - {pid} -- {name} v{ver}{dep_str}")
 
 
 def claim_job() -> dict | None:
@@ -44,12 +73,10 @@ def download_files(input_files: list, work_dir: str) -> None:
         source_key = f.get("sourceKey")
         filename = f.get("originalFilename")
 
-        # 跳过 sourceKey 或文件名为空的记录（如 manifest.json）
         if not source_key or not filename:
             print(f"[download] 跳过 sourceKey={source_key} filename={filename}")
             continue
 
-        # 按 sourceKey 组织本地目录结构
         dest_dir = os.path.join(work_dir, source_key)
         os.makedirs(dest_dir, exist_ok=True)
         dest_path = os.path.join(dest_dir, filename)
@@ -129,10 +156,10 @@ def process_job(job: dict) -> None:
         report_failure(job_id, "No input files in claim response")
         return
 
-    # 选择 Pipeline
     pipeline = PIPELINES.get(pipeline_id)
     if not pipeline:
-        print(f"[job-{job_id}] 未知 pipeline: {pipeline_id}")
+        known = ", ".join(PIPELINES.keys()) or "(无)"
+        print(f"[job-{job_id}] 未知 pipeline: {pipeline_id}，已知: {known}")
         report_failure(job_id, f"Unknown pipeline: {pipeline_id}")
         return
 
@@ -140,6 +167,7 @@ def process_job(job: dict) -> None:
     output_dir = os.path.join(work_dir, "output")
     os.makedirs(output_dir, exist_ok=True)
 
+    success = False
     try:
         # 1. 下载输入文件
         print(f"[job-{job_id}] 下载 {len(input_files)} 个输入文件...")
@@ -159,22 +187,39 @@ def process_job(job: dict) -> None:
         # 4. 上报成功
         ok = report_success(job_id, uploaded)
         if ok:
-            print(f"[job-{job_id}] ✅ 完成")
+            success = True
+            print(f"[job-{job_id}] [OK] 完成")
         else:
-            print(f"[job-{job_id}] ⚠️ 处理完成但上报失败")
+            print(f"[job-{job_id}] [WARN] 处理完成但上报失败")
 
     except Exception as e:
         error_msg = f"{e}\n{traceback.format_exc()}"
-        print(f"[job-{job_id}] ❌ 失败: {e}")
+        print(f"[job-{job_id}] [ERR] 失败: {e}")
         report_failure(job_id, error_msg[:5000])
 
     finally:
-        # 清理临时文件
-        if os.path.exists(work_dir):
-            shutil.rmtree(work_dir, ignore_errors=True)
+        if success:
+            # 成功后清理临时文件
+            if os.path.exists(work_dir):
+                shutil.rmtree(work_dir, ignore_errors=True)
+        else:
+            # 失败时保留 work_dir，方便排查
+            print(f"[job-{job_id}] [KEEP] 工作目录已保留: {work_dir}")
 
 
 def main():
+    # 支持 --list-pipelines 查看已注册的 Pipeline
+    if "--list-pipelines" in sys.argv:
+        print("=" * 50)
+        print("mmdp-worker 已注册 Pipeline 列表")
+        print("=" * 50)
+        print_registered_pipelines()
+        print()
+        generate_manifest()
+        print()
+        print("在管理后台创建处理规则时，pipelineId 请使用上述列表中的值。")
+        return
+
     print("=" * 50)
     print("mmdp-worker 启动")
     print(f"  后端: {BACKEND_URL}")
@@ -182,8 +227,13 @@ def main():
     print(f"  工作目录: {WORK_DIR}")
     print(f"  轮询间隔: {POLL_INTERVAL}s")
     print("=" * 50)
+    print_registered_pipelines()
+    print("=" * 50)
 
     validate()
+
+    # 生成 manifest 文件（Backend 直接读取此文件获取 Pipeline 列表）
+    generate_manifest()
 
     while True:
         job = claim_job()
