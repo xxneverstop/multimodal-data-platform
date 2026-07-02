@@ -8,6 +8,7 @@ public record ProcessingJobResponse(
         Long id,
         Long taskId,
         Long sessionId,
+        String sessionCode,
         String pipelineId,
         String executorType,
         String status,

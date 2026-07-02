@@ -2,6 +2,7 @@ import http from "@/api/http";
 import type {
   PipelineDefinitionResponse,
   CreatePipelineRequest,
+  WorkerPipelineInfo,
 } from "@/types/pipeline";
 
 export function fetchPipelines(): Promise<PipelineDefinitionResponse[]> {
@@ -27,4 +28,9 @@ export function disablePipeline(id: number): Promise<void> {
 /** 根据 session 获取可用的 pipeline 列表 */
 export function fetchAvailablePipelines(sessionId: number): Promise<PipelineDefinitionResponse[]> {
   return http.get(`/api/pipelines/available/${sessionId}`) as any;
+}
+
+/** 获取 Worker 端已注册的 Pipeline 清单（供新建处理规则时下拉选择） */
+export function fetchWorkerAvailablePipelines(): Promise<WorkerPipelineInfo[]> {
+  return http.get("/api/pipelines/worker-available") as any;
 }

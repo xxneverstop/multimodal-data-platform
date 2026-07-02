@@ -121,6 +121,17 @@ public class PipelineDefinitionServiceImpl implements PipelineDefinitionService 
     }
 
     @Override
+    public void enablePipeline(Long id) {
+        PipelineDefinition pipeline = pipelineMapper.selectById(id);
+        if (pipeline == null) {
+            throw new BizException("Pipeline not found: " + id);
+        }
+        pipeline.setEnabled(1);
+        pipeline.setUpdatedAt(LocalDateTime.now());
+        pipelineMapper.updateById(pipeline);
+    }
+
+    @Override
     public List<PipelineDefinitionResponse> getAvailablePipelines(Long sessionId) {
         CollectionSession session = sessionMapper.selectById(sessionId);
         if (session == null || session.getProfileId() == null) {
@@ -157,17 +168,22 @@ public class PipelineDefinitionServiceImpl implements PipelineDefinitionService 
                 .toList();
     }
 
+    /**
+     * 判断 session 现有资产是否能满足 pipeline 的输入要求。
+     * 使用 OR 逻辑：只要 session 拥有任意一种 pipeline 声明的输入类型，即视为可用。
+     * inputAssetTypes 为空时表示不限输入，始终可用。
+     */
     private boolean hasRequiredInputs(PipelineDefinition pipeline, List<String> existingAssetTypes) {
         List<String> required = parseStringList(pipeline.getInputAssetTypes());
         if (required == null || required.isEmpty()) {
             return true;
         }
         for (String requiredType : required) {
-            if (!existingAssetTypes.contains(requiredType)) {
-                return false;
+            if (existingAssetTypes.contains(requiredType)) {
+                return true;
             }
         }
-        return true;
+        return false;
     }
 
     private void syncProfileLinks(String pipelineId, List<Long> profileIds) {

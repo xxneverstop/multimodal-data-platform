@@ -36,6 +36,10 @@ public class AuthInterceptor implements HandlerInterceptor {
         if (requestUri.startsWith("/api/admin/") && !currentUser.isAdmin()) {
             throw new ForbiddenException("当前用户无权限访问该接口");
         }
+        // Pipeline 增删改仅管理员可操作
+        if (requestUri.startsWith("/api/pipelines") && !"GET".equalsIgnoreCase(request.getMethod()) && !currentUser.isAdmin()) {
+            throw new ForbiddenException("仅管理员可管理处理规则");
+        }
         return true;
     }
 }

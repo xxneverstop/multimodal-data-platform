@@ -27,6 +27,9 @@ public interface ProcessingJobService {
 
     ProcessingJobResponse getJob(Long jobId);
 
+    /** 列出全部处理任务（按时间倒序，最近 50 条） */
+    List<ProcessingJobResponse> listAllJobs();
+
     /** Worker 领取一个 PENDING 任务，返回含 inputFiles 的完整响应，无任务返回 null */
     WorkerClaimResponse claimJob();
 

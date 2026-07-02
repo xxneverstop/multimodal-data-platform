@@ -2,14 +2,14 @@
 setlocal enabledelayedexpansion
 
 echo ============================================
-echo  MMDP Deployment Package Builder
+echo  MMDP Deployment Package Builder (v0.4.0)
 echo ============================================
 echo.
 
 set "SCRIPT_DIR=%~dp0"
 
 REM ---- Backend Build ----
-echo [1/5] Building backend ^(mvn clean package -DskipTests^)...
+echo [1/6] Building backend ^(mvn clean package -DskipTests^)...
 cd /d "%SCRIPT_DIR%mmdp-backend"
 call mvn clean package -DskipTests
 if %errorlevel% neq 0 (
@@ -20,7 +20,7 @@ if %errorlevel% neq 0 (
 echo        Backend build OK.
 
 REM ---- Frontend Build ----
-echo [2/5] Building frontend ^(npm run build^)...
+echo [2/6] Building frontend ^(npm run build^)...
 cd /d "%SCRIPT_DIR%mmdp-frontend"
 call npm run build
 if %errorlevel% neq 0 (
@@ -31,15 +31,17 @@ if %errorlevel% neq 0 (
 echo        Frontend build OK.
 
 REM ---- Prepare deploy directories ----
-echo [3/5] Preparing deploy directories...
+echo [3/6] Preparing deploy directories...
 cd /d "%SCRIPT_DIR%"
 if not exist "deploy\backend"   mkdir "deploy\backend"
 if not exist "deploy\frontend"  mkdir "deploy\frontend"
 if not exist "deploy\initdb"    mkdir "deploy\initdb"
 if not exist "deploy\nginx"     mkdir "deploy\nginx"
+if not exist "deploy\worker"    mkdir "deploy\worker"
+if not exist "deploy\worker\src" mkdir "deploy\worker\src"
 
 REM ---- Copy artifacts ----
-echo [4/5] Copying artifacts...
+echo [4/6] Copying artifacts...
 
 REM Backend JAR
 REM Find the built JAR (handles versioned filenames like mmdp-backend-1.0.0-SNAPSHOT.jar)
@@ -68,7 +70,20 @@ if %errorlevel% neq 0 (
 REM Schema SQL for MySQL auto-init
 copy /y "mmdp-backend\src\main\resources\schema.sql" "deploy\initdb\schema.sql" >nul
 
-echo [5/5] Done.
+REM Worker source code
+echo [5/6] Copying Worker source code...
+if exist "deploy\worker\src" rmdir /s /q "deploy\worker\src"
+xcopy /e /q /i "mmdp-worker" "deploy\worker\src" >nul
+REM 移除不需要部署的 __pycache__ 和 pipeline-manifest.json
+for /d /r "deploy\worker\src" %%d in (__pycache__) do @if exist "%%d" rmdir /s /q "%%d" 2>nul
+if exist "deploy\worker\src\pipeline-manifest.json" del /q "deploy\worker\src\pipeline-manifest.json" 2>nul
+if %errorlevel% neq 0 (
+    echo [ERROR] Failed to copy Worker source!
+    pause
+    exit /b 1
+)
+
+echo [6/6] Done.
 echo.
 echo ============================================
 echo  Deploy package ready at: %SCRIPT_DIR%deploy\

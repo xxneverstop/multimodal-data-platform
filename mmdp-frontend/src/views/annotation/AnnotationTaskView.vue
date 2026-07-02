@@ -9,6 +9,8 @@
       <button class="light2-btn light2-btn-primary" @click="dialogOpen = true">+ 新建标注</button>
     </div>
 
+    <hr class="light2-divider" />
+
     <!-- filters -->
     <div class="light2-filters">
       <input v-model="filters.taskId" type="text" placeholder="搜索 taskId..." class="light2-input" @keyup.enter="searchCount += 1" />

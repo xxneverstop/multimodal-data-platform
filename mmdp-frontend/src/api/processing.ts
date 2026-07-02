@@ -4,6 +4,7 @@ import type {
   CreateManualProcessingJobRequest,
   CreateProcessingJobRequest,
   CreateSessionJobRequest,
+  ExecutionGraphResponse,
   ManualProcessingJobResponse,
   ProcessingJobResponse,
   TaskLineageResponse
@@ -33,6 +34,11 @@ export async function fetchTaskLineage(taskId: number): Promise<TaskLineageRespo
   return http.get(`/api/tasks/${taskId}/lineage`);
 }
 
+/** 列出全部处理任务（最近 50 条） */
+export async function fetchAllJobs(): Promise<ProcessingJobResponse[]> {
+  return http.get("/api/processing-jobs");
+}
+
 /** 对 Session 创建处理任务 */
 export async function createSessionJob(sessionId: number, payload: CreateSessionJobRequest): Promise<ProcessingJobResponse> {
   return http.post(`/api/sessions/${sessionId}/processing-jobs`, payload);
@@ -41,4 +47,9 @@ export async function createSessionJob(sessionId: number, payload: CreateSession
 /** 列出 Session 关联的处理任务 */
 export async function fetchSessionJobs(sessionId: number): Promise<ProcessingJobResponse[]> {
   return http.get(`/api/sessions/${sessionId}/processing-jobs`);
+}
+
+/** 获取任务的执行图（DAG） */
+export async function fetchExecutionGraph(taskId: number): Promise<ExecutionGraphResponse> {
+  return http.get(`/api/tasks/${taskId}/execution-graph`);
 }

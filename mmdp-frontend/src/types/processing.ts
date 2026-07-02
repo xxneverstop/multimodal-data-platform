@@ -91,3 +91,39 @@ export interface TaskLineageResponse {
   nodes: TaskLineageNode[];
   edges: TaskLineageEdge[];
 }
+
+/** 执行图（DAG）节点，类似 Airflow DAG 中的 Task */
+export interface ExecutionGraphNode {
+  id: string;
+  type: "task" | "session" | "asset" | "job" | "qc";
+  label: string;
+  assetType?: string | null;
+  pipelineId?: string | null;
+  status?: string | null;
+  detailId?: number | null;
+  depth: number;
+  sourceType?: string | null;
+  executorType?: string | null;
+}
+
+/** 执行图（DAG）边 */
+export interface ExecutionGraphEdge {
+  source: string;
+  target: string;
+  label: string;
+  style?: "solid" | "dashed";
+}
+
+/** 执行图响应 */
+export interface ExecutionGraphResponse {
+  nodes: ExecutionGraphNode[];
+  edges: ExecutionGraphEdge[];
+}
+
+/** 布局后的节点（含坐标） */
+export interface LayoutedNode extends ExecutionGraphNode {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}

@@ -5,6 +5,8 @@ import com.honortech.dataplatform.file.entity.DataFile;
 import com.honortech.dataplatform.profile.entity.CollectionProfile;
 import com.honortech.dataplatform.profile.entity.CollectionProfileSource;
 import com.honortech.dataplatform.session.dto.SessionPlaybackResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -14,6 +16,8 @@ import java.util.Map;
 
 @Component
 public class DefaultPlaybackRuleResolver implements PlaybackRuleResolver {
+
+    private static final Logger log = LoggerFactory.getLogger(DefaultPlaybackRuleResolver.class);
 
     @Override
     public boolean supports(String ruleCode) {
@@ -40,17 +44,26 @@ public class DefaultPlaybackRuleResolver implements PlaybackRuleResolver {
             if (sampleRate == null) { sampleRate = profileSource.getExpectedSampleRate(); }
             String videoUrl = null;
             String jsonlUrl = null;
+            // 优先取处理产物（PROCESSED_OUTPUT），其次取原始文件
             for (DataFile dataFile : sessionFiles) {
                 if (dataFile.getSourceKey() == null || !dataFile.getSourceKey().equalsIgnoreCase(profileSource.getSourceKey())) {
                     continue;
                 }
                 String lower = (dataFile.getOriginalFilename() == null ? "" : dataFile.getOriginalFilename()).toLowerCase(Locale.ROOT);
+                boolean isProcessed = "PROCESSED_OUTPUT".equals(dataFile.getFileRole());
                 if (lower.endsWith(".mp4")) {
-                    videoUrl = "/api/files/" + dataFile.getId() + "/download";
-                } else if (lower.endsWith(".jsonl")) {
-                    jsonlUrl = "/api/files/" + dataFile.getId() + "/download";
+                    // 处理产物优先：已有非产物 URL 时用产物覆盖，已有产物 URL 不覆盖
+                    if (videoUrl == null || isProcessed) {
+                        videoUrl = "/api/files/" + dataFile.getId() + "/download";
+                    }
+                } else if (lower.endsWith(".jsonl") || lower.endsWith(".csv")) {
+                    if (jsonlUrl == null || isProcessed) {
+                        jsonlUrl = "/api/files/" + dataFile.getId() + "/download";
+                    }
                 }
             }
+            log.info("Playback source [{}]: videoUrl={}, jsonlUrl={}, playbackKind={}",
+                    profileSource.getSourceKey(), videoUrl, jsonlUrl, profileSource.getPlaybackKind());
             // 根据实际可用的媒体文件修正播放类型
             String resolvedType = type;
             if (videoUrl != null) {

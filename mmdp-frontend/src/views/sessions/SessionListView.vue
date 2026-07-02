@@ -8,38 +8,23 @@
       </div>
     </div>
 
-    <!-- metrics -->
-    <div class="light2-metrics">
-      <div v-for="m in metricItems" :key="m.label" class="light2-mcard">
-        <div class="light2-mstripe" :style="{ background: m.tone === 'session' ? '#0d9444' : m.tone === 'asset' ? '#7c3aed' : m.tone === 'export' ? '#0d8ea0' : '#c5222f' }" />
-        <div class="light2-mlabel">{{ m.label }}</div>
-        <div class="light2-mvalue">{{ m.value }}</div>
+    <hr class="light2-divider" />
+
+    <!-- filters -->
+    <div class="light2-filters" style="flex-direction:column;align-items:stretch;gap:10px">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input v-model="listQuery.sessionNumber" type="text" placeholder="采集编号" class="light2-input" style="max-width:140px;flex:none" @keyup.enter="applyQuery" />
+        <input v-model="listQuery.taskNumber" type="text" placeholder="任务编号" class="light2-input" style="max-width:140px;flex:none" @keyup.enter="applyQuery" />
+        <input v-model="listQuery.modality" type="text" placeholder="模态" class="light2-input" style="max-width:120px;flex:none" @keyup.enter="applyQuery" />
+        <input v-model="listQuery.startedAtFrom" type="date" class="light2-input" style="max-width:140px;flex:none" />
+        <span style="color:var(--color-text-tertiary);font-size:12px">至</span>
+        <input v-model="listQuery.startedAtTo" type="date" class="light2-input" style="max-width:140px;flex:none" />
+        <button class="light2-btn light2-btn-primary light2-btn-sm" @click="applyQuery">搜索</button>
+        <button class="light2-btn light2-btn-sec light2-btn-sm" @click="resetQuery">重置</button>
       </div>
     </div>
 
-    <!-- filters -->
-    <div class="light2-filters">
-      <input v-model="listQuery.sessionNumber" type="text" placeholder="搜索采集编号 / 任务 / 被试..." class="light2-input" @keyup.enter="applyQuery" />
-      <div class="light2-sel">
-        <select v-model="listQuery.qcStatus" @change="applyQuery">
-          <option value="">全部 QC</option>
-          <option v-for="o in qcOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
-        </select>
-      </div>
-      <div class="light2-sel">
-        <select v-model="listQuery.exportStatus" @change="applyQuery">
-          <option value="">全部导出</option>
-          <option v-for="o in exportOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
-        </select>
-      </div>
-      <div class="light2-sel">
-        <select v-model="sortState.field" @change="updateSortField(sortState.field)">
-          <option v-for="o in sortOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
-        </select>
-      </div>
-      <button class="light2-btn light2-btn-primary light2-btn-sm" @click="applyQuery">搜索</button>
-      <button class="light2-btn light2-btn-sec light2-btn-sm" @click="resetQuery">重置</button>
-    </div>
+    <hr class="light2-divider" />
 
     <!-- table -->
     <div class="light2-tbl overflow-x-auto">
@@ -85,6 +70,7 @@
               <div class="light2-actions">
                 <RouterLink :to="`/play/${session.sessionId}`" class="light2-btn light2-btn-sec light2-btn-sm">播放</RouterLink>
                 <RouterLink :to="`/sessions/${session.sessionId}`" class="light2-btn light2-btn-sec light2-btn-sm">详情</RouterLink>
+                <button v-if="authStore.isAdmin.value" class="light2-btn light2-btn-sec light2-btn-sm" style="color:#c5222f;border-color:#fecdd3" @click="openDeleteSessionDialog(session)">删除</button>
               </div>
             </td>
           </tr>
@@ -100,6 +86,22 @@
         <button :disabled="pageState.page >= Math.ceil(pageState.total / pageState.pageSize)" @click="updatePage(pageState.page + 1)">下一页 →</button>
       </div>
     </div>
+
+    <!-- 删除确认对话框 -->
+    <AppDialog
+      :open="deleteDialogOpen"
+      title="删除采集会话"
+      :description="`将永久删除采集会话及其所有文件、资产、处理记录和 OSS 数据，不可恢复。`"
+      confirm-text="确认删除"
+      :loading="deleteSubmitting"
+      @close="deleteDialogOpen = false"
+      @confirm="handleDeleteSession"
+    >
+      <div class="rounded-[10px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        此操作不可逆！将删除该会话下的所有数据（{{ deleteTarget?.assetCount ?? 0 }} 个资产、{{ deleteTarget?.fileCount ?? 0 }} 个文件）。
+      </div>
+      <p v-if="deleteMessage" class="mt-3 text-sm text-[var(--color-text-secondary)]">{{ deleteMessage }}</p>
+    </AppDialog>
   </div>
 </template>
 
@@ -107,8 +109,42 @@
 import { computed, onMounted, reactive, ref, watch, watchEffect } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { fetchSessions } from "@/api/sessions";
+import { deleteSession } from "@/api/admin";
+import { useAuthStore } from "@/stores/auth";
+import AppDialog from "@/components/AppDialog.vue";
 import type { SessionListItem } from "@/types/session";
-import { formatDateTime, formatFileSize } from "@/utils/format";
+import { formatDateTime, formatFileSize, formatStatusLabel } from "@/utils/format";
+
+const authStore = useAuthStore();
+
+// ── 删除会话 ──
+const deleteDialogOpen = ref(false);
+const deleteTarget = ref<SessionListItem | null>(null);
+const deleteSubmitting = ref(false);
+const deleteMessage = ref("");
+
+function openDeleteSessionDialog(session: SessionListItem) {
+  deleteTarget.value = session;
+  deleteMessage.value = "";
+  deleteDialogOpen.value = true;
+}
+
+async function handleDeleteSession() {
+  if (!deleteTarget.value) return;
+  deleteSubmitting.value = true;
+  deleteMessage.value = "";
+  try {
+    const result = await deleteSession(deleteTarget.value.id);
+    deleteMessage.value = result.summary;
+    deleteDialogOpen.value = false;
+    deleteTarget.value = null;
+    await loadSessions();
+  } catch (e) {
+    deleteMessage.value = e instanceof Error ? e.message : "删除失败";
+  } finally {
+    deleteSubmitting.value = false;
+  }
+}
 
 type SessionListQueryState = {
   taskNumber: string;

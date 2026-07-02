@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-screen bg-[var(--color-surface-page)] text-[var(--color-text-900)]">
-    <header class="fixed inset-x-0 top-0 z-40 border-b border-[var(--color-border-soft)] bg-white">
+    <header class="fixed inset-x-0 top-0 z-40 bg-white" style="border-bottom:1px solid #d0d5dd">
       <div class="flex h-14 items-center justify-between gap-4 px-4 md:px-5">
         <RouterLink
           to="/home"
@@ -51,7 +51,7 @@
     </header>
 
     <div class="flex min-h-screen w-full min-w-0 pt-14">
-      <aside class="hidden shrink-0 border-r border-[var(--color-border-soft)] bg-white lg:flex">
+      <aside class="hidden shrink-0 bg-white lg:flex" style="border-right:1px solid #d0d5dd">
         <div class="sticky top-14 flex h-[calc(100vh-56px)] w-[56px] flex-col items-center gap-2 px-2 py-4">
           <RouterLink
             to="/home"
@@ -61,7 +61,9 @@
           >
             <BaseIcon name="home" />
           </RouterLink>
+          <div style="width:24px;height:1px;background:#d0d5dd;margin:4px 0" />
           <SideNavGroup label="功能" icon="grid" :active="isFunctionRoute" @toggle="setSection('function')" />
+          <div v-if="authStore.isAdmin.value" style="width:24px;height:1px;background:#d0d5dd;margin:4px 0" />
           <SideNavGroup
             v-if="authStore.isAdmin.value"
             label="管理"
@@ -74,30 +76,30 @@
 
       <aside
         v-if="showSecondarySidebar"
-        class="hidden w-[160px] shrink-0 border-r border-[var(--color-border-soft)] bg-white lg:flex lg:flex-col"
+        class="hidden w-[100px] shrink-0 bg-white lg:flex lg:flex-col" style="border-right:1px solid #d0d5dd"
       >
-        <div class="sticky top-14 h-[calc(100vh-56px)] px-2 py-4">
-          <nav class="space-y-1">
+        <div class="sticky top-14 h-[calc(100vh-56px)] px-1.5 py-3">
+          <nav class="space-y-0.5">
             <RouterLink
               v-for="item in secondaryItems"
               :key="item.to"
               :to="item.to"
-              class="relative flex items-center gap-2 rounded-[var(--radius-md)] border border-transparent px-3 py-2 text-sm transition"
+              class="relative flex items-center gap-2 rounded-[var(--radius-md)] border border-transparent px-2.5 py-2 text-[13.5px] font-medium tracking-[0.01em] transition"
               :class="
                 route.path === item.to
-                  ? ['app-nav-module-active before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[2.5px] before:rounded-r', moduleToneClass(item.to)]
+                  ? ['app-nav-module-active before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[2.5px] before:rounded-r', 'app-tone-brand']
                   : 'text-[var(--color-text-tertiary)] hover:bg-[var(--color-hover-subtle)] hover:text-[var(--color-text-primary)] hover:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
               "
             >
               <BaseIcon v-if="item.icon" :name="item.icon" size="sm" class="shrink-0" />
-              <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
+              <span class="truncate">{{ item.label }}</span>
             </RouterLink>
           </nav>
         </div>
       </aside>
 
       <div class="min-w-0 flex-1">
-        <div class="border-b border-[var(--color-border-soft)] bg-white px-4 py-2.5 md:px-5 lg:hidden">
+        <div class="bg-white px-4 py-2.5 md:px-5 lg:hidden" style="border-bottom:1px solid #d0d5dd">
           <nav class="flex gap-2 overflow-x-auto pb-1">
             <RouterLink
               v-for="item in mobileItems"
@@ -106,7 +108,7 @@
               class="inline-flex shrink-0 items-center gap-1.5 rounded-[var(--radius-md)] border px-3 py-1.5 text-sm transition"
               :class="
                 route.path === item.to
-                  ? ['app-nav-module-active', moduleToneClass(item.to)]
+                  ? ['app-nav-module-active', 'app-tone-brand']
                   : 'border-[var(--color-border-default)] bg-white text-[var(--color-text-secondary)] hover:bg-[var(--color-hover-subtle)] hover:text-[var(--color-text-primary)]'
               "
             >

@@ -9,7 +9,14 @@
         <span>{{ data.subjectCode }} / {{ data.actionName }}</span>
         <span class="pb-sep">|</span>
         <span>{{ fmt(data.durationMs) }}</span>
+        <span class="pb-sep">|</span>
+        <span>帧 {{ currentFrame }} / {{ totalFrames }}</span>
+        <span class="pb-sep">|</span>
+        <span>{{ (masterTime * 1000).toFixed(0) }}ms</span>
+        <span class="pb-sep">|</span>
+        <span>{{ playbackRate }}x</span>
       </div>
+      <span class="pb-kb-hint">空格暂停 ←→跳帧</span>
       <button class="pb-toggle-sidebar" @click="sidebarOpen = !sidebarOpen">☰</button>
     </header>
 
@@ -64,33 +71,53 @@
 
       <!-- main -->
       <main class="pb-main">
+        <!-- DEBUG BAR (开发调试用，上线去掉) -->
+        <div v-if="data" style="background:#1a1a0a;color:#aaa;padding:3px 12px;font-size:10px;font-family:monospace;flex-shrink:0;display:flex;gap:16px;flex-wrap:wrap;border-bottom:1px solid #333">
+          <span>data=✅</span><span>sources={{ Object.keys(data.sources).length }}</span><span>videos={{ videoEntries.length }}</span><span>imus={{ imuEntries.length }}</span>
+          <span v-for="(s,k) in data.sources" :key="k">{{ k }}:{{ s.videoUrl?'🎬':s.jsonlUrl?'📊':'⚪' }}</span>
+        </div>
         <!-- loading / error -->
         <div v-if="loading" class="pb-state">加载播放数据中...</div>
         <div v-else-if="apiError" class="pb-state pb-state-err">{{ apiError }}</div>
 
         <template v-if="data && !loading && !apiError">
+          <!-- DEBUG: 显示所有 source 的 URL -->
+          <div class="pb-debug" v-if="false">
+            <pre>{{ JSON.stringify(data.sources, null, 2) }}</pre>
+          </div>
           <!-- videos -->
           <div class="pb-video-area">
-            <div v-if="!videoEntries.length" class="pb-state">此 Session 没有可播放的视频</div>
+            <div v-if="!videoEntries.length" class="pb-state">
+              此 Session 没有可播放的视频
+              <div style="font-size:12px;color:#666;margin-top:8px">
+                共 {{ Object.keys(data.sources).length }} 个 source，
+                其中 video 类型 {{ Object.values(data.sources).filter(s=>s.type==='video').length }} 个
+              </div>
+            </div>
             <div v-else class="pb-video-grid" :style="{ gridTemplateColumns: `repeat(${videoCols}, 1fr)` }">
-              <div v-for="(src, key) in videoEntries" :key="key" class="pb-video-panel">
-                <div class="pb-video-label">{{ src.label || key }}</div>
+              <div v-for="[key, src] in videoEntries" :key="key" class="pb-video-panel">
+                <div class="pb-video-label">
+                  <span>{{ src.label || key }}</span>
+                  <span class="pb-sync-dot" :class="videoLoaded[key] ? 'pb-sync-ok' : 'pb-sync-wait'" :title="videoLoaded[key] ? '已同步' : '加载中'"></span>
+                  <span class="pb-frame-info">帧 {{ currentFrame }} / {{ totalFrames }}</span>
+                </div>
                 <div class="pb-video-wrap">
                   <video
-                    v-if="src.videoUrl && !videoErrors[key]"
                     :ref="el => setVidRef(key, el)"
                     :src="src.videoUrl"
                     class="pb-video"
                     preload="auto"
+                    controls
                     @timeupdate="e => onVidTime(key, e)"
-                    @loadedmetadata="() => onVidReady(key)"
+                    @loadedmetadata="e => onVidReady(key, e)"
+                    @canplay="() => onVidCanPlay(key)"
                     @error="e => onVidErr(key, e)"
                     @ended="onEnded"
                     playsinline
-                  />
-                  <div v-else-if="videoErrors[key]" class="pb-video-placeholder pb-video-err">{{ videoErrors[key] }}</div>
-                  <div v-else class="pb-video-placeholder">加载中...</div>
+                  ></video>
+                  <div class="pb-ts-overlay" v-if="videoLoaded[key]">{{ masterTime.toFixed(3) }}s</div>
                 </div>
+                <div v-if="videoErrors[key]" class="pb-err-msg">{{ videoErrors[key] }}</div>
               </div>
             </div>
           </div>
@@ -102,7 +129,7 @@
               <span class="pb-imu-meta">{{ imuEntries.length }} 源</span>
             </div>
             <div class="pb-imu-grid">
-              <div v-for="(src, key) in imuEntries" :key="key" class="pb-imu-card">
+              <div v-for="[key, src] in imuEntries" :key="key" class="pb-imu-card">
                 <div class="pb-imu-card-title">{{ src.label || key }}</div>
                 <div class="pb-imu-vals">
                   <span class="pb-v-x">X: {{ fmtVal(currentImu[key]?.acc?.x) }}</span>
@@ -124,16 +151,19 @@
         <span class="pb-tl-time">{{ fmt(data.durationMs) }}</span>
       </div>
       <div class="pb-ctrls">
+        <button class="pb-ctrl" @click="stepBackward">⏮ -1帧</button>
         <button class="pb-ctrl" @click="skipBackward">⏪ -5s</button>
         <button class="pb-ctrl pb-ctrl-play" @click="togglePlay">{{ playing ? '⏸ 暂停' : '▶ 播放' }}</button>
         <button class="pb-ctrl" @click="skipForward">⏩ +5s</button>
+        <button class="pb-ctrl" @click="stepForward">⏭ +1帧</button>
       </div>
+      <div class="pb-kb-row">←→ 跳帧 · 空格 暂停 · Shift+←→ 跳5秒</div>
     </footer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { fetchSessionPlayback } from "@/api/sessions";
 import type { SessionPlaybackResponse, PlaybackSource } from "@/api/sessions";
@@ -143,7 +173,7 @@ const route = useRoute();
 // state
 const loading = ref(true);
 const apiError = ref("");
-const data = shallowRef<SessionPlaybackResponse | null>(null);
+const data = ref<SessionPlaybackResponse | null>(null);
 const playing = ref(false);
 const masterTime = ref(0);
 const playbackRate = ref(1);
@@ -152,7 +182,7 @@ const videoCols = ref(2);
 const videoRefs: Record<string, HTMLVideoElement | null> = {};
 const videoTimes: Record<string, number> = {};
 const videoErrors = ref<Record<string, string>>({});
-const imuDatasets = shallowRef<Record<string, any[]>>({});
+const imuDatasets = ref<Record<string, any[]>>({});
 const SKIP = 5;
 
 // computed
@@ -195,21 +225,27 @@ function fmtVal(v: number | undefined): string { return v != null ? v.toFixed(3)
 
 function setVidRef(key: string, el: any) { videoRefs[key] = el as HTMLVideoElement | null; }
 
+// frame tracking
+const videoFps = ref(20); // default, updated from video metadata
+const currentFrame = computed(() => Math.floor(masterTime.value * videoFps.value) + 1);
+const totalFrames = computed(() => Math.floor(maxDuration.value * videoFps.value));
+const frameStep = computed(() => videoFps.value > 0 ? 1 / videoFps.value : 0.05);
+
 // playback controls
 function togglePlay() {
   if (playing.value) { pauseAll(); } else { playAll(); }
 }
 function playAll() {
   playing.value = true;
-  for (const [, s] of videoEntries.value) {
-    const el = videoRefs[s.label ?? ""];
-    if (el) el.play().catch(() => {});
+  for (const [key] of videoEntries.value) {
+    const el = videoRefs[key];
+    if (el) { el.playbackRate = playbackRate.value; el.play().catch(() => {}); }
   }
 }
 function pauseAll() {
   playing.value = false;
-  for (const [, s] of videoEntries.value) {
-    const el = videoRefs[s.label ?? ""];
+  for (const [key] of videoEntries.value) {
+    const el = videoRefs[key];
     if (el) el.pause();
   }
 }
@@ -228,6 +264,14 @@ function skipForward() {
   masterTime.value = Math.min(maxDuration.value, masterTime.value + SKIP);
   for (const el of Object.values(videoRefs)) if (el) el.currentTime = masterTime.value;
 }
+function stepBackward() {
+  masterTime.value = Math.max(0, masterTime.value - frameStep.value);
+  for (const el of Object.values(videoRefs)) if (el) el.currentTime = masterTime.value;
+}
+function stepForward() {
+  masterTime.value = Math.min(maxDuration.value, masterTime.value + frameStep.value);
+  for (const el of Object.values(videoRefs)) if (el) el.currentTime = masterTime.value;
+}
 function setSpeed(s: number) {
   playbackRate.value = s;
   for (const el of Object.values(videoRefs)) if (el) el.playbackRate = s;
@@ -240,26 +284,82 @@ function onVidTime(key: string, e: Event) {
     masterTime.value = (e.target as HTMLVideoElement).currentTime;
   }
 }
-function onVidReady(_key: string) {}
+const videoLoaded = ref<Record<string, boolean>>({});
+
+function onVidReady(key: string, e: Event) {
+  const v = e.target as HTMLVideoElement;
+  videoLoaded.value[key] = true;
+  if (data.value && (!data.value.durationMs || data.value.durationMs === 0)) {
+    if (v.duration && isFinite(v.duration)) {
+      data.value.durationMs = Math.round(v.duration * 1000);
+    }
+  }
+  // 从视频元数据估算 FPS（用于帧计数）
+  if (v.duration && isFinite(v.duration) && (v as any).webkitDecodedFrameCount) {
+    const fc = (v as any).webkitDecodedFrameCount as number;
+    if (fc > 0) videoFps.value = Math.round(fc / v.duration);
+  }
+}
+function onVidCanPlay(key: string) { videoLoaded.value[key] = true; console.log("[Playback] video canplay:", key); }
 function onVidErr(key: string, e: Event) {
   const v = e.target as HTMLVideoElement;
-  videoErrors.value[key] = v.error ? `加载失败 (错误 ${v.error.code})` : "未知错误";
+  const err = v.error;
+  const codes = ['', 'MEDIA_ERR_ABORTED', 'MEDIA_ERR_NETWORK', 'MEDIA_ERR_DECODE', 'MEDIA_ERR_SRC_NOT_SUPPORTED'];
+  videoErrors.value[key] = err
+    ? `❌ ${codes[err.code] || '未知错误'}: ${err.message || v.src}`
+    : `❌ 未知错误: ${v.src}`;
+  console.error(`[Playback] ${key} error:`, err, v.src);
 }
 function onEnded() {
   if (Object.values(videoRefs).every(r => !r || r.ended || r.paused)) playing.value = false;
 }
 
 // IMU loading
-function loadImuData(jsonlUrl: string) {
-  fetch(jsonlUrl).then(r => r.text()).then(text => {
-    const lines = text.trim().split("\n").filter(Boolean);
-    const parsed = lines.map(line => {
-      const obj = JSON.parse(line);
+function loadImuData(url: string) {
+  fetch(url).then(r => r.text()).then(text => {
+    // 从内容判断格式：CSV 以列名开头，JSONL 以 { 开头
+    const trimmed = text.trim();
+    const isCsv = !trimmed.startsWith("{") && !trimmed.startsWith("[");
+    let parsed: any[];
+    if (isCsv) {
+      const lines = text.trim().split("\n").filter(Boolean);
+      const headers = lines[0].split(",").map(h => h.trim());
+      const tsIdx = headers.indexOf("timestamp");
+      const accX = headers.indexOf("acc_x"), accY = headers.indexOf("acc_y"), accZ = headers.indexOf("acc_z");
+      const gyrX = headers.indexOf("gyro_x"), gyrY = headers.indexOf("gyro_y"), gyrZ = headers.indexOf("gyro_z");
+      parsed = lines.slice(1).map(line => {
+        const cols = line.split(",").map(c => parseFloat(c.trim()));
+        return {
+          _t: tsIdx >= 0 ? cols[tsIdx] : 0,
+          acc: { x: accX >= 0 ? cols[accX] : 0, y: accY >= 0 ? cols[accY] : 0, z: accZ >= 0 ? cols[accZ] : 0 },
+          gyro: { x: gyrX >= 0 ? cols[gyrX] : 0, y: gyrY >= 0 ? cols[gyrY] : 0, z: gyrZ >= 0 ? cols[gyrZ] : 0 },
+          quat: {},
+        };
+      });
+    } else {
+      const lines = text.trim().split("\n").filter(Boolean);
       const startedAtMs = data.value ? new Date(data.value.startedAt).getTime() : 0;
-      return { _t: obj.hostReceiveTimestamp - startedAtMs, acc: obj.latest?.acc ?? {}, gyro: obj.latest?.gyro ?? {}, quat: obj.latest?.quat ?? {} };
-    });
-    imuDatasets.value = { ...imuDatasets.value, [jsonlUrl]: parsed };
-  }).catch(() => {});
+      parsed = lines.map(line => {
+        const obj = JSON.parse(line);
+        return { _t: obj.hostReceiveTimestamp - startedAtMs, acc: obj.latest?.acc ?? {}, gyro: obj.latest?.gyro ?? {}, quat: obj.latest?.quat ?? {} };
+      });
+    }
+    imuDatasets.value = { ...imuDatasets.value, [url]: parsed };
+  }).catch((err: any) => {
+    console.error(`[Playback] IMU load failed: ${url}`, err);
+  });
+}
+
+// keyboard
+function onKeyDown(e: KeyboardEvent) {
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+  switch (e.code) {
+    case "Space": e.preventDefault(); togglePlay(); break;
+    case "ArrowLeft": e.preventDefault(); e.shiftKey ? skipBackward() : stepBackward(); break;
+    case "ArrowRight": e.preventDefault(); e.shiftKey ? skipForward() : stepForward(); break;
+    case "ArrowUp": e.preventDefault(); setSpeed(Math.min(4, playbackRate.value + 0.5)); break;
+    case "ArrowDown": e.preventDefault(); setSpeed(Math.max(0.5, playbackRate.value - 0.5)); break;
+  }
 }
 
 // mount
@@ -268,6 +368,7 @@ onMounted(async () => {
   if (!sid) { loading.value = false; return; }
   try {
     data.value = await fetchSessionPlayback(sid);
+    console.log("[Playback] API response:", JSON.stringify(data.value?.sources, null, 2));
     if (!data.value || !Object.keys(data.value.sources).length) {
       apiError.value = "此 Session 无可播放内容，请先执行处理任务生成可播放数据。";
       loading.value = false;
@@ -281,8 +382,10 @@ onMounted(async () => {
   } catch (e: any) {
     apiError.value = e?.message || String(e) || "加载播放数据失败";
   }
+  document.addEventListener("keydown", onKeyDown);
   loading.value = false;
 });
+onUnmounted(() => { document.removeEventListener("keydown", onKeyDown); });
 </script>
 
 <style>
@@ -331,19 +434,23 @@ html, body, #app { height: 100%; margin: 0; }
 .pb-sb-annotation { margin-top:auto; border-top:1px solid #333; padding-top:12px; }
 
 /* main */
-.pb-main { flex:1; overflow-y:auto; display:flex; flex-direction:column; }
+.pb-main { flex:1; overflow:hidden; display:flex; flex-direction:column; min-height:0; }
 .pb-state { flex:1; display:flex; align-items:center; justify-content:center; color:#888; font-size:16px; }
 .pb-state-err { color:#ef4444; }
 
 /* video area */
-.pb-video-area { padding:12px; flex:1; }
-.pb-video-grid { display:grid; gap:8px; }
-.pb-video-panel { display:flex; flex-direction:column; min-height:200px; }
-.pb-video-label { font-size:11px; color:#888; margin-bottom:4px; }
-.pb-video-wrap { flex:1; background:#000; border-radius:4px; overflow:hidden; display:flex; align-items:center; justify-content:center; min-height:180px; }
-.pb-video { width:100%; height:100%; object-fit:contain; }
-.pb-video-placeholder { color:#666; font-size:13px; }
+.pb-video-area { padding:12px; flex:1; display:flex; flex-direction:column; min-height:0; }
+.pb-video-grid { display:grid; gap:8px; flex:1; min-height:0; }
+.pb-video-panel { display:flex; flex-direction:column; min-height:0; flex:1; border:1px solid #444; border-radius:4px; }
+.pb-video-label { font-size:11px; color:#888; margin-bottom:4px; flex-shrink:0; }
+.pb-video-wrap { flex:1; background:#111; border-radius:4px; overflow:hidden; display:flex; align-items:center; justify-content:center; min-height:240px; position:relative; }
+.pb-video-wrap::before { content:"视频加载中..."; color:#555; font-size:13px; position:absolute; }
+.pb-video-wrap:has(video)::before { display:none; }
+.pb-video { width:100%; height:100%; object-fit:contain; display:block; }
+.pb-video-placeholder { color:#666; font-size:13px; display:flex; align-items:center; justify-content:center; width:100%; height:100%; }
 .pb-video-err { color:#ef4444; }
+.pb-err-msg { color:#ef4444; font-size:11px; padding:4px 8px; margin-top:4px; background:#2a0000; border-radius:4px; }
+.pb-debug { padding:12px; background:#1a1a1a; border:1px solid #444; border-radius:4px; overflow:auto; max-height:300px; font-size:11px; font-family:monospace; white-space:pre; }
 
 /* IMU */
 .pb-imu { padding:8px 16px; background:#1e1e1e; border-top:1px solid #333; flex-shrink:0; }
@@ -367,4 +474,13 @@ html, body, #app { height: 100%; margin: 0; }
 .pb-ctrl-play { background:#2563eb; border-color:#2563eb; color:#fff; font-weight:600; }
 .pb-ctrl-play:hover { background:#1d4ed8; }
 .pb-ctrl:disabled { opacity:.4; cursor:default; }
+
+/* new overlay elements */
+.pb-kb-hint { font-size:10px; color:#555; white-space:nowrap; }
+.pb-sync-dot { width:6px; height:6px; border-radius:50%; display:inline-block; flex-shrink:0; }
+.pb-sync-ok { background:#22c55e; }
+.pb-sync-wait { background:#f59e0b; }
+.pb-frame-info { font-size:10px; color:#666; }
+.pb-ts-overlay { position:absolute; bottom:6px; right:8px; background:rgba(0,0,0,0.7); color:#aaa; font-size:11px; font-family:monospace; padding:2px 6px; border-radius:3px; pointer-events:none; }
+.pb-kb-row { text-align:center; font-size:10px; color:#555; margin-top:4px; }
 </style>

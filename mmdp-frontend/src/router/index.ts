@@ -31,6 +31,18 @@ const router = createRouter({
       meta: { title: "数据回放", fullscreen: true, requiresAuth: true },
     },
     {
+      path: "/motion-view/:sessionId",
+      name: "motion-viewer",
+      component: () => import("@/views/motion/MotionViewer.vue"),
+      meta: { title: "3D 动作查看", fullscreen: true, requiresAuth: true },
+    },
+    {
+      path: "/acquisition/:taskId/dag",
+      name: "execution-graph",
+      component: () => import("@/views/lineage/ExecutionGraphView.vue"),
+      meta: { title: "数据链路 DAG", fullscreen: true, requiresAuth: true },
+    },
+    {
       path: "/",
       component: () => import("@/layouts/AppLayout.vue"),
       meta: { requiresAuth: true },

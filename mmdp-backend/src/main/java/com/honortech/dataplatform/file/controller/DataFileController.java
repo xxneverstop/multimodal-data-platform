@@ -96,6 +96,11 @@ public class DataFileController {
         return ApiResponse.success(dataFileService.listFilesByTaskId(taskId).stream().map(this::toResponse).toList());
     }
 
+    @GetMapping("/api/sessions/{sessionId}/files")
+    public ApiResponse<List<DataFileResponse>> listSessionFiles(@PathVariable Long sessionId) {
+        return ApiResponse.success(dataFileService.listFilesBySessionId(sessionId).stream().map(this::toResponse).toList());
+    }
+
     @GetMapping("/api/files/{fileId}/download")
     public void downloadFile(@PathVariable Long fileId, HttpServletResponse response) {
         DataFile file = dataFileService.getFile(fileId);

@@ -249,6 +249,16 @@ public class DataFileServiceImpl implements DataFileService {
         );
     }
 
+    @Override
+    public List<DataFile> listFilesBySessionId(Long sessionId) {
+        return dataFileMapper.selectList(
+                new LambdaQueryWrapper<DataFile>()
+                        .eq(DataFile::getSessionId, sessionId)
+                        .orderByAsc(DataFile::getSourceKey)
+                        .orderByAsc(DataFile::getOriginalFilename)
+        );
+    }
+
     public DataFileResponse toResponse(DataFile file) {
         return new DataFileResponse(
                 file.getId(),

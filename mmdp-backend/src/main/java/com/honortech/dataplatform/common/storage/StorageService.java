@@ -17,4 +17,6 @@ public interface StorageService {
     ObjectStat headObject(String bucketName, String objectKey);
 
     TemporaryCredentials assumeUploadCredentials(String bucketName, String objectKey, String roleSessionName);
+
+    void deleteObject(String bucketName, String objectKey);
 }

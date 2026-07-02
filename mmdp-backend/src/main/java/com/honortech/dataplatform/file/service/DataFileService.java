@@ -25,4 +25,6 @@ public interface DataFileService {
     DataFile getFile(Long fileId);
 
     List<DataFile> listFilesByTaskId(Long taskId);
+
+    List<DataFile> listFilesBySessionId(Long sessionId);
 }

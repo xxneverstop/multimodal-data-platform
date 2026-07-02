@@ -10,6 +10,10 @@ public enum AssetType {
     RGB_VIDEO_MP4,
     MOCAP_CSV,
     SMPL_RESULT,
+    SMPL_NPZ,
+    PHYSICS_REPORT,
+    MOTION_VIEWER_JSON,
+    MOTION_FBX,
     ALIGNED_RESULT,
     CAMERA_PARAM,
     LEFT_IMAGE_SEQUENCE,
@@ -18,6 +22,9 @@ public enum AssetType {
     FRAME_TIMESTAMPS_CSV,
     DEPTH_RAW,
     POSE_CACHE,
+    IMU_ALIGNED_CSV,
+    ALIGNMENT_REPORT,
+    QC_SUMMARY,
     OTHER;
 
     public static AssetType fromNullable(String value) {
