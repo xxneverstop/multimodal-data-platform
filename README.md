@@ -6,7 +6,7 @@ MMDP is an MVP repository for a multimodal data platform with a Vue frontend and
 
 - `mmdp-frontend/`: Vue 3 + Vite frontend
 - `mmdp-backend/`: Spring Boot backend
-- `docs/`: project notes, MVP scope, and version docs
+- `docs/`: architecture, deployment, specs, and processing docs — see [docs/README.md](docs/README.md)
 - `container-bat/`: local helper scripts
 
 ## Monorepo Convention

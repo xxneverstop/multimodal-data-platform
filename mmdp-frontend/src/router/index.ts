@@ -145,6 +145,12 @@ const router = createRouter({
           component: () => import("@/views/management/ManagementModuleView.vue"),
           meta: { title: "管理模块", requiresAdmin: true },
         },
+        {
+          path: "tools/session-organizer",
+          name: "session-organizer",
+          component: () => import("@/views/tools/SessionOrganizerView.vue"),
+          meta: { title: "Session 整理工具" },
+        },
         { path: "tasks", redirect: "/acquisition" },
         { path: "tasks/new", redirect: "/acquisition/new" },
         { path: "tasks/:taskId", redirect: (to) => `/acquisition/${to.params.taskId}` },

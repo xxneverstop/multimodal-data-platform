@@ -109,16 +109,20 @@ public class AcquisitionTaskController {
     }
 
     private TaskResponse toResponse(AcquisitionTask task, long sessionCount, CollectionSession latestSession) {
-        Subject subject = subjectService.findById(task.getSubjectId());
+        Long effectiveSubjectId = latestSession != null && latestSession.getSubjectId() != null
+                ? latestSession.getSubjectId() : task.getSubjectId();
+        Subject subject = effectiveSubjectId != null ? subjectService.findById(effectiveSubjectId) : null;
         CollectionProfile profile = task.getProfileId() == null ? null : collectionProfileService.getRequiredById(task.getProfileId());
         return new TaskResponse(
                 task.getId(),
                 task.getTaskCode(),
                 task.getTaskName(),
-                task.getSubjectId(),
-                task.getSubjectCode(),
+                effectiveSubjectId,
+                latestSession != null && latestSession.getSubjectCode() != null
+                        ? latestSession.getSubjectCode() : task.getSubjectCode(),
                 subject == null ? null : subject.getSubjectName(),
-                task.getActionName(),
+                latestSession != null && latestSession.getActionName() != null
+                        ? latestSession.getActionName() : task.getActionName(),
                 task.getProfileId(),
                 profile == null ? null : profile.getProfileName(),
                 task.getDeviceType(),

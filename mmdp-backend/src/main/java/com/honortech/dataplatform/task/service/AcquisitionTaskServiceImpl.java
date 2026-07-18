@@ -7,6 +7,8 @@ import com.honortech.dataplatform.common.exception.BizException;
 import com.honortech.dataplatform.common.util.BusinessCodeGenerator;
 import com.honortech.dataplatform.profile.entity.CollectionProfile;
 import com.honortech.dataplatform.profile.service.CollectionProfileService;
+import com.honortech.dataplatform.session.entity.CollectionSession;
+import com.honortech.dataplatform.session.mapper.CollectionSessionMapper;
 import com.honortech.dataplatform.subject.entity.Subject;
 import com.honortech.dataplatform.subject.service.SubjectService;
 import com.honortech.dataplatform.task.dto.CreateTaskRequest;
@@ -16,6 +18,8 @@ import com.honortech.dataplatform.task.mapper.AcquisitionTaskMapper;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 
 @Service
@@ -25,29 +29,39 @@ public class AcquisitionTaskServiceImpl implements AcquisitionTaskService {
     private final SubjectService subjectService;
     private final CollectionProfileService collectionProfileService;
     private final BusinessCodeGenerator businessCodeGenerator;
+    private final CollectionSessionMapper collectionSessionMapper;
 
     public AcquisitionTaskServiceImpl(
             AcquisitionTaskMapper acquisitionTaskMapper,
             SubjectService subjectService,
             CollectionProfileService collectionProfileService,
-            BusinessCodeGenerator businessCodeGenerator) {
+            BusinessCodeGenerator businessCodeGenerator,
+            CollectionSessionMapper collectionSessionMapper) {
         this.acquisitionTaskMapper = acquisitionTaskMapper;
         this.subjectService = subjectService;
         this.collectionProfileService = collectionProfileService;
         this.businessCodeGenerator = businessCodeGenerator;
+        this.collectionSessionMapper = collectionSessionMapper;
     }
 
     @Override
     public AcquisitionTask createTask(CreateTaskRequest request) {
-        Subject subject = subjectService.resolveSubject(request.subjectCode(), request.subjectName());
+        Subject subject = (request.subjectCode() != null && !request.subjectCode().isBlank())
+                || (request.subjectName() != null && !request.subjectName().isBlank())
+                ? subjectService.resolveSubject(request.subjectCode(), request.subjectName())
+                : null;
         CollectionProfile profile = request.profileId() == null ? null : collectionProfileService.getRequiredById(request.profileId());
         AcquisitionTask task = new AcquisitionTask();
         task.setTaskCode(businessCodeGenerator.next("TASK"));
         task.setTaskName(request.taskName());
-        task.setSubjectId(subject.getId());
-        task.setSubjectCode(subject.getSubjectCode());
-        task.setSubjectCodeSnapshot(subject.getSubjectCode());
-        task.setActionName(request.actionName());
+        if (subject != null) {
+            task.setSubjectId(subject.getId());
+            task.setSubjectCode(subject.getSubjectCode());
+            task.setSubjectCodeSnapshot(subject.getSubjectCode());
+        }
+        if (request.actionName() != null && !request.actionName().isBlank()) {
+            task.setActionName(request.actionName());
+        }
         task.setDeviceType(request.deviceType() == null || request.deviceType().isBlank()
                 ? (profile == null ? "" : profile.getDeviceGroupCode())
                 : request.deviceType());
@@ -80,22 +94,67 @@ public class AcquisitionTaskServiceImpl implements AcquisitionTaskService {
         wrapper.eq(request.getTaskId() != null, AcquisitionTask::getId, request.getTaskId());
         wrapper.eq(hasText(request.getTaskCode()), AcquisitionTask::getTaskCode, trimToNull(request.getTaskCode()));
         wrapper.eq(hasText(request.getStatus()), AcquisitionTask::getStatus, trimToNull(request.getStatus()));
-        wrapper.like(hasText(request.getSubjectCode()), AcquisitionTask::getSubjectCode, trimToNull(request.getSubjectCode()));
-        wrapper.like(hasText(request.getActionName()), AcquisitionTask::getActionName, trimToNull(request.getActionName()));
+
+        // subjectCode/actionName filters now query via session table
+        if (hasText(request.getSubjectCode())) {
+            List<Long> taskIds = findTaskIdsBySessionField("subject_code", trimToNull(request.getSubjectCode()));
+            if (taskIds.isEmpty()) {
+                wrapper.eq(AcquisitionTask::getId, -1L); // force empty result
+            } else {
+                wrapper.in(AcquisitionTask::getId, taskIds);
+            }
+        }
+        if (hasText(request.getActionName())) {
+            List<Long> taskIds = findTaskIdsBySessionField("action_name", trimToNull(request.getActionName()));
+            if (taskIds.isEmpty()) {
+                wrapper.eq(AcquisitionTask::getId, -1L); // force empty result
+            } else {
+                wrapper.in(AcquisitionTask::getId, taskIds);
+            }
+        }
+
         if (hasText(request.getKeyword())) {
             String keyword = trimToNull(request.getKeyword());
-            wrapper.and(q -> q
-                    .like(AcquisitionTask::getTaskName, keyword)
-                    .or()
-                    .like(AcquisitionTask::getSubjectCode, keyword)
-                    .or()
-                    .like(AcquisitionTask::getActionName, keyword)
-            );
+            List<Long> sessionTaskIds = findTaskIdsBySessionKeyword(keyword);
+            if (!sessionTaskIds.isEmpty()) {
+                wrapper.and(q -> q
+                        .like(AcquisitionTask::getTaskName, keyword)
+                        .or()
+                        .in(AcquisitionTask::getId, sessionTaskIds)
+                );
+            } else {
+                wrapper.like(AcquisitionTask::getTaskName, keyword);
+            }
         }
         wrapper.ge(request.getCollectDateFrom() != null, AcquisitionTask::getCollectDate, request.getCollectDateFrom());
         wrapper.le(request.getCollectDateTo() != null, AcquisitionTask::getCollectDate, request.getCollectDateTo());
         applySorting(wrapper, request.getSortBy(), request.getSortOrder());
         return acquisitionTaskMapper.selectPage(page, wrapper);
+    }
+
+    private List<Long> findTaskIdsBySessionField(String column, String value) {
+        List<CollectionSession> sessions = collectionSessionMapper.selectList(
+                new LambdaQueryWrapper<CollectionSession>()
+                        .select(CollectionSession::getTaskId)
+                        .like("subject_code".equals(column), CollectionSession::getSubjectCode, value)
+                        .like("action_name".equals(column), CollectionSession::getActionName, value)
+                        .groupBy(CollectionSession::getTaskId)
+        );
+        return sessions.stream().map(CollectionSession::getTaskId).distinct().toList();
+    }
+
+    private List<Long> findTaskIdsBySessionKeyword(String keyword) {
+        List<CollectionSession> sessions = collectionSessionMapper.selectList(
+                new LambdaQueryWrapper<CollectionSession>()
+                        .select(CollectionSession::getTaskId)
+                        .and(q -> q
+                                .like(CollectionSession::getSubjectCode, keyword)
+                                .or()
+                                .like(CollectionSession::getActionName, keyword)
+                        )
+                        .groupBy(CollectionSession::getTaskId)
+        );
+        return sessions.stream().map(CollectionSession::getTaskId).distinct().toList();
     }
 
     @Override

@@ -742,9 +742,7 @@ public class SessionImportServiceImpl implements SessionImportService {
         if (!profile.getProfileCode().equalsIgnoreCase(firstNonBlank(manifest.profileCode(), ""))) {
             throw new BizException("Manifest profileCode does not match task profile");
         }
-        if (!task.getSubjectCode().equalsIgnoreCase(firstNonBlank(manifest.subjectCode(), ""))) {
-            throw new BizException("Manifest subject.code does not match task subjectCode");
-        }
+        // subjectCode is now session-level; no longer validated against task
     }
 
     private void validateUploadedFiles(FinalizeSessionImportRequest request, Long taskId) {

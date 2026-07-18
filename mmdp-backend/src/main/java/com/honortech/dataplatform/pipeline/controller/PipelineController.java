@@ -76,7 +76,7 @@ public class PipelineController {
         return ApiResponse.success(pipelineDefinitionService.getAvailablePipelines(sessionId));
     }
 
-    /** 获取 Worker 端 Pipeline 清单（直接读取 pipeline-manifest.json，供前端下拉选择） */
+    /** 获取 Worker 端 Pipeline 清单（从内存注册表读取，Worker 启动时主动注册） */
     @GetMapping("/worker-available")
     public ApiResponse<List<WorkerPipelineInfo>> getWorkerAvailablePipelines() {
         return ApiResponse.success(manifestService.getAvailablePipelines());

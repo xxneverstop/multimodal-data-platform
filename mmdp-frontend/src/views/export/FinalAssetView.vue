@@ -73,7 +73,7 @@
         <a
           v-for="asset in downloadableAssets"
           :key="asset.id"
-          :href="asset.rawAsset.storageUrl || '#'"
+          :href="`/api/files/${asset.rawAsset.fileId}/download`"
           target="_blank"
           rel="noreferrer"
           class="flex items-center justify-between rounded-[10px] border bg-white px-3 py-3 text-sm transition hover:bg-slate-50"
@@ -118,7 +118,7 @@ const filteredSessions = computed(() =>
   }),
 );
 
-const downloadableAssets = computed(() => selectedSession.value?.assets.filter((a) => a.rawAsset.storageUrl) ?? []);
+const downloadableAssets = computed(() => selectedSession.value?.assets.filter((a) => a.rawAsset.fileId) ?? []);
 
 const BADGE_MAP: Record<string, { cls: string; color: string }> = {
   PASSED: { cls: "light2-badge-ok", color: "#0d7d3e" },

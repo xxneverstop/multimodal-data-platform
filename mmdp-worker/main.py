@@ -32,6 +32,27 @@ def generate_manifest():
         print(f"[manifest] [WARN] 写入失败: {e}")
 
 
+def register_with_backend() -> bool:
+    """向 Backend 注册当前 Worker 的 Pipeline 清单"""
+    manifest = get_manifest()
+    try:
+        resp = requests.post(
+            f"{BACKEND_URL}/api/worker/pipelines/register",
+            json=manifest,
+            timeout=10
+        )
+        data = resp.json()
+        if data.get("success"):
+            print(f"[register] 已向 Backend 注册 {len(manifest)} 个 Pipeline")
+            return True
+        else:
+            print(f"[register] Backend 返回失败: {data.get('message')}")
+            return False
+    except Exception as e:
+        print(f"[register] 注册失败: {e}")
+        return False
+
+
 def print_registered_pipelines():
     """启动时打印已注册的 Pipeline 列表"""
     if not PIPELINES:
@@ -57,9 +78,17 @@ def claim_job() -> dict | None:
         data = resp.json()
         if data.get("success") and data.get("data"):
             return data["data"]
+        # 调试: 后端返回了 success 但没有 data，说明当前无 CREATED 作业
+        msg = data.get("message", "")
+        if "No pending" not in msg:
+            # 非预期的空响应，打印详情便于排查
+            print(f"\n[claim] 后端返回空作业, message={msg}, data={data.get('data')}")
+        return None
+    except requests.JSONDecodeError:
+        print(f"\n[claim] 响应非JSON格式, status={resp.status_code}, body={resp.text[:500]}")
         return None
     except Exception as e:
-        print(f"[claim] 请求失败: {e}")
+        print(f"\n[claim] 请求失败: {e}")
         return None
 
 
@@ -158,8 +187,40 @@ def process_job(job: dict) -> None:
 
     pipeline = PIPELINES.get(pipeline_id)
     if not pipeline:
-        known = ", ".join(PIPELINES.keys()) or "(无)"
-        print(f"[job-{job_id}] 未知 pipeline: {pipeline_id}，已知: {known}")
+        # ── 详细调试信息：帮助定位 pipeline 匹配失败的原因 ──
+        import difflib
+        import datetime as _dt
+        registered = list(PIPELINES.keys())
+        # 字符串相似度匹配，找出最接近的已注册 pipeline
+        close_matches = difflib.get_close_matches(pipeline_id, registered, n=3, cutoff=0.4)
+        # repr 对比：发现不可见字符（空格、零宽字符、编码差异等）
+        pid_repr = repr(pipeline_id)
+        registered_repr = {k: repr(k) for k in registered}
+        close_repr = {k: registered_repr[k] for k in close_matches} if close_matches else {}
+
+        print(f"\n{'='*60}")
+        print(f"[job-{job_id}] ❌ 未知 pipeline，调试信息如下：")
+        print(f"  进程 PID: {os.getpid()}")
+        print(f"  时间:     {_dt.datetime.now().isoformat()}")
+        print(f"  查询 pipeline_id: {pid_repr}")
+        print(f"  长度:     {len(pipeline_id)} 字符")
+        print(f"  hex:      {pipeline_id.encode('utf-8', errors='replace').hex()}")
+        print(f"  已注册 pipeline ({len(registered)} 个):")
+        for k in registered:
+            marker = " ← 最接近" if k in (close_matches or []) else ""
+            r = registered_repr[k]
+            match_note = ""
+            if k == pipeline_id:
+                match_note = " [字符串相等但 dict.get 返回 None — 疑似 key 类型不同！]"
+            elif k.strip() == pipeline_id.strip():
+                match_note = " [去空格后相等 — 存在首尾空格差异]"
+            elif k.lower() == pipeline_id.lower():
+                match_note = " [忽略大小写相等]"
+            print(f"    {r}{marker}{match_note}")
+        if close_repr:
+            print(f"  最接近匹配: {close_repr}")
+        print(f"  后端返回 job 摘要: jobId={job_id}, taskId={job.get('taskId')}, sessionId={job.get('sessionId')}")
+        print(f"{'='*60}")
         report_failure(job_id, f"Unknown pipeline: {pipeline_id}")
         return
 
@@ -172,6 +233,14 @@ def process_job(job: dict) -> None:
         # 1. 下载输入文件
         print(f"[job-{job_id}] 下载 {len(input_files)} 个输入文件...")
         download_files(input_files, work_dir)
+
+        # 1.5 保存作业参数到 work_dir，供 Pipeline 读取
+        params = job.get("parameters")
+        if params:
+            params_path = os.path.join(work_dir, "parameters.json")
+            with open(params_path, "w", encoding="utf-8") as f:
+                json.dump(params, f, ensure_ascii=False)
+            print(f"[job-{job_id}] 参数已保存: {params_path}")
 
         # 2. 执行 Pipeline
         print(f"[job-{job_id}] 执行 {pipeline_id}...")
@@ -232,10 +301,20 @@ def main():
 
     validate()
 
-    # 生成 manifest 文件（Backend 直接读取此文件获取 Pipeline 列表）
+    # 生成 manifest 文件（供本地调试查看）
     generate_manifest()
 
+    # 向 Backend 注册 Pipeline 清单
+    register_with_backend()
+
+    last_register_time = time.time()
     while True:
+        # 每 60 秒向 Backend 心跳注册（处理 Backend 重启导致注册表清空的场景）
+        now = time.time()
+        if now - last_register_time > 60:
+            register_with_backend()
+            last_register_time = now
+
         job = claim_job()
         if job:
             job_id = job.get("jobId", "?")

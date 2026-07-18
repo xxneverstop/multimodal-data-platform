@@ -75,13 +75,13 @@ class BasePipeline(ABC):
 
     @classmethod
     def manifest(cls) -> Dict:
-        """导出 Pipeline 元数据，供 Worker 生成 manifest.json"""
+        """导出 Pipeline 元数据（camelCase JSON，与 Backend API 一致）"""
         return {
-            "pipeline_id": cls.pipeline_id,
-            "display_name": cls.display_name,
+            "pipelineId": cls.pipeline_id,
+            "displayName": cls.display_name,
             "description": cls.description,
             "version": cls.version,
-            "input_asset_types": cls.input_asset_types,
-            "output_asset_types": cls.output_asset_types,
-            "runtime_dependencies": cls.runtime_dependencies,
+            "inputAssetTypes": cls.input_asset_types,
+            "outputAssetTypes": cls.output_asset_types,
+            "runtimeDependencies": cls.runtime_dependencies,
         }

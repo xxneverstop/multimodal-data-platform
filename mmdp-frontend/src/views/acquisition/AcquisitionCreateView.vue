@@ -14,22 +14,6 @@
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm text-slate-600">被试编号 <span class="text-rose-500">*</span></span>
-          <input v-model="form.subjectCode" required class="app-input app-input-compact" placeholder="例如：S001" />
-        </label>
-
-        <label class="block">
-          <span class="mb-1 block text-sm text-slate-600">被试姓名 <span class="text-rose-500">*</span></span>
-          <input v-model="form.subjectName" required class="app-input app-input-compact" placeholder="例如：张三" />
-          <span class="mt-0.5 text-xs text-slate-400">新被试会自动创建，已有被试会按编号自动关联。</span>
-        </label>
-
-        <label class="block">
-          <span class="mb-1 block text-sm text-slate-600">采集动作 <span class="text-rose-500">*</span></span>
-          <input v-model="form.actionName" required class="app-input app-input-compact" placeholder="例如：步行 / 跑步 / 跳跃" />
-        </label>
-
-        <label class="block">
           <span class="mb-1 block text-sm text-slate-600">采集日期 <span class="text-rose-500">*</span></span>
           <input v-model="form.collectDate" type="date" required class="app-input app-input-compact" />
         </label>
@@ -99,9 +83,6 @@ const profileIdValue = ref("");
 
 const form = reactive<CreateTaskRequest>({
   taskName: "",
-  subjectCode: "",
-  subjectName: "",
-  actionName: "",
   profileId: null,
   deviceType: "",
   modality: "",

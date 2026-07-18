@@ -125,7 +125,7 @@
               </div>
             </div>
             <div class="light2-asset-row-actions">
-              <a v-if="showDownload(asset)" :href="asset.rawAsset.storageUrl||undefined" target="_blank" rel="noreferrer" class="light2-btn light2-btn-sec light2-btn-sm">下载</a>
+              <a v-if="showDownload(asset)" :href="`/api/files/${asset.rawAsset.fileId}/download`" target="_blank" rel="noreferrer" class="light2-btn light2-btn-sec light2-btn-sm">下载</a>
               <BaseButton :to="`/data/${asset.id}?taskId=${detail.task?.id??detail.session.taskId}`" variant="ghost" tone="asset" size="sm">详情</BaseButton>
             </div>
           </article>
@@ -177,6 +177,16 @@
                 <StatusBadge :status="job.status" />
               </div>
             </article>
+            <!-- 失败作业汇总：展示 errorMessage 便于快速定位 -->
+            <div v-if="failedJobs.length" class="mt-3 rounded-[10px] border border-rose-200 bg-rose-50 p-3">
+              <p class="text-xs font-medium text-rose-700 mb-2">失败作业详情 ({{ failedJobs.length }} 个)：</p>
+              <div v-for="fj in failedJobs" :key="fj.id" class="mb-2 text-xs text-rose-600">
+                <span class="font-mono">Job #{{ fj.id }}</span>
+                <span class="font-mono ml-1">{{ fj.pipelineId }}</span>
+                <span class="ml-2 text-rose-400">{{ formatDateTime(fj.updatedAt) }}</span>
+                <p class="mt-0.5 text-rose-500 whitespace-pre-wrap">{{ fj.errorMessage || '(无错误信息)' }}</p>
+              </div>
+            </div>
           </div>
         </section>
       </div>
@@ -223,6 +233,32 @@
               <div class="light2-progress-fill light2-progress-fill-green" :style="{ width: `${uploadProgressPercent}%` }"></div>
             </div>
             <div class="light2-info-card-progress-caption">{{ uploadProgressCaption }}</div>
+          </div>
+        </section>
+
+        <!-- 标注进度 -->
+        <section v-if="annotationProgress && annotationProgress.totalAssets > 0" class="light2-info-card">
+          <div class="light2-info-card-hdr">动作标注进度</div>
+          <div class="light2-info-card-row">
+            <span class="light2-info-card-label">标注进度</span>
+            <span class="light2-info-card-value light2-info-card-code">{{ annotationProgress.annotatedCount }}/{{ annotationProgress.totalAssets }}</span>
+          </div>
+          <div class="light2-info-card-progress">
+            <div class="light2-progress">
+              <div
+                class="light2-progress-fill light2-progress-fill-green"
+                :style="{ width: `${annotationProgress.totalAssets > 0 ? Math.round(annotationProgress.annotatedCount / annotationProgress.totalAssets * 100) : 0}%` }"
+              />
+            </div>
+            <div class="light2-info-card-progress-caption">
+              <span v-if="annotationProgress.annotatedCount > 0">
+                评级分布：
+                <span v-for="(count, rating) in annotationProgress.ratingDistribution" :key="rating" style="margin-left:4px">
+                  {{ rating }}: {{ count }}
+                </span>
+              </span>
+              <span v-else>暂无标注记录</span>
+            </div>
           </div>
         </section>
 
@@ -280,6 +316,8 @@ import type { PipelineDefinitionResponse } from "@/types/pipeline";
 import type { ProcessingJobResponse } from "@/types/processing";
 import type { DataFileResponse } from "@/types/file";
 import { formatDateTime, formatFileSize, formatStatusLabel } from "@/utils/format";
+import { fetchSessionAnnotationProgress } from "@/api/annotation";
+import type { AnnotationProgressResponse } from "@/types/annotation";
 
 const route = useRoute();
 const authStore = useAuthStore();
@@ -291,6 +329,9 @@ const deleteJobTargetId = ref<number | null>(null);
 const deleteJobTargetPipeline = ref("");
 const deleteJobSubmitting = ref(false);
 const deleteJobMessage = ref("");
+
+// ── 标注进度 ──
+const annotationProgress = ref<AnnotationProgressResponse | null>(null);
 
 function openDeleteJobDialog(jobId: number, pipelineId: string) {
   deleteJobTargetId.value = jobId;
@@ -311,7 +352,7 @@ async function handleDeleteJobOutputs() {
     // 重新加载详情
     const sessionId = Number(route.params.sessionId);
     if (sessionId) {
-      detail.value = await fetchSessionDetail(sessionId);
+      detail.value = await fetchSessionDetail(String(sessionId));
       await loadProcessingData(sessionId);
     }
   } catch (e) {
@@ -376,11 +417,33 @@ async function executePipeline(p: PipelineDefinitionResponse) {
   executeError.value = "";
   executeSuccess.value = false;
   try {
+    console.debug("[executePipeline] 提交处理任务:", {
+      sessionId: detail.value!.session.id!,
+      pipelineId: p.pipelineId,
+      displayName: p.displayName,
+      executorType: (p as any).executorType,
+      timestamp: new Date().toISOString(),
+    });
     await createSessionJob(detail.value!.session.id!, { pipelineId: p.pipelineId });
     executeSuccess.value = true;
+    console.debug("[executePipeline] 提交成功，刷新作业列表...");
     await loadProcessingData(detail.value!.session.id!);
   } catch (e: any) {
-    executeError.value = e?.message || "创建处理任务失败";
+    // ── 详细调试信息 ──
+    const detail2 = {
+      message: e?.message,
+      status: e?.status,
+      responseData: e?.response?.data,
+      pipelineId: p.pipelineId,
+      sessionId: detail.value?.session?.id,
+      timestamp: new Date().toISOString(),
+    };
+    console.error("[executePipeline] 失败详情:", detail2);
+    executeError.value = [
+      e?.message || "创建处理任务失败",
+      e?.status ? `(HTTP ${e.status})` : "",
+      e?.response?.data?.message ? `后端: ${e.response.data.message}` : "",
+    ].filter(Boolean).join(" ");
   } finally {
     executingPipelineId.value = null;
   }
@@ -390,6 +453,12 @@ const FAILURE_STATUSES = new Set(["FAILED", "ERROR", "QC_FAILED", "WARNING", "QC
 const PENDING_STATUSES = new Set(["PENDING", "WAITING", "RUNNING", "UPLOADING", "CREATED"]);
 const READY_STATUSES = new Set(["READY", "PASSED", "QC_PASSED", "SUCCESS", "PLAYABLE", "UPLOADED"]);
 
+/** 失败的作业（含详细错误信息，用于调试面板） */
+const failedJobs = computed(() =>
+  sessionJobs.value.filter(j => FAILURE_STATUSES.has(j.status))
+);
+
+/** 按 job 聚合的 session 静态作业快照（不包含 sessionJobs 轮询更新） */
 const sortedJobs = computed(() =>
   [...(detail.value?.jobs ?? [])].sort((left, right) =>
     latestTime(right.updatedAt, right.createdAt).localeCompare(latestTime(left.updatedAt, left.createdAt)),
@@ -704,7 +773,7 @@ function isPlayableAsset(asset: AssetListItem) {
 }
 
 function showDownload(asset: AssetListItem) {
-  return Boolean(asset.rawAsset.storageUrl) && !isPlayableAsset(asset);
+  return Boolean(asset.rawAsset.fileId) && !isPlayableAsset(asset);
 }
 
 function isMotionViewable(asset: AssetListItem) {
@@ -739,6 +808,7 @@ async function loadDetail() {
   if (detail.value?.session?.id) {
     loadProcessingData(detail.value.session.id);
     try { sessionFiles.value = await fetchSessionFiles(detail.value.session.id); } catch { sessionFiles.value = []; }
+    try { annotationProgress.value = await fetchSessionAnnotationProgress(detail.value.session.id); } catch { annotationProgress.value = null; }
   }
 }
 

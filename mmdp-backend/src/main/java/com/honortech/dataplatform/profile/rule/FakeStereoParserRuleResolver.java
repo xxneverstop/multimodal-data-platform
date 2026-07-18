@@ -2,6 +2,7 @@ package com.honortech.dataplatform.profile.rule;
 
 import com.honortech.dataplatform.profile.entity.CollectionProfile;
 import com.honortech.dataplatform.profile.entity.CollectionProfileSource;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -12,6 +13,7 @@ import java.util.Locale;
  * 根据 ZIP 中的文件相对路径，匹配对应的 profile sourceKey。
  */
 @Component
+@Order(0)
 public class FakeStereoParserRuleResolver implements ParserRuleResolver {
 
     @Override

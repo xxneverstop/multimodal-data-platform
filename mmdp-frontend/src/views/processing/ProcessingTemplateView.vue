@@ -105,7 +105,7 @@
                   <option v-for="wp in workerPipelines" :key="wp.pipelineId" :value="wp.pipelineId">{{ wp.pipelineId }} — {{ wp.displayName }}</option>
                 </select>
                 <span v-if="loadingWorkerPipelines" style="font-size:11px;color:#3b82f6;margin-top:2px">正在查询 Worker Pipeline 列表...</span>
-                <span v-else-if="!workerPipelines.length" style="font-size:11px;color:#d92d20;margin-top:2px">未获取到 Worker Pipeline 列表，请确认 Worker 已启动并生成了 pipeline-manifest.json</span>
+                <span v-else-if="!workerPipelines.length" style="font-size:11px;color:#d92d20;margin-top:2px">未获取到 Worker Pipeline 列表，请确认 Worker 已启动并完成注册</span>
               </label>
             </div>
           </fieldset>

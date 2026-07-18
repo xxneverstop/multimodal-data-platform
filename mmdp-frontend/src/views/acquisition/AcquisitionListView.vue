@@ -114,14 +114,6 @@
           <input v-model="form.taskName" class="app-input app-input-compact" />
         </label>
         <label class="block">
-          <span class="mb-1 block text-sm text-[var(--color-text-secondary)]">被试编号</span>
-          <input v-model="form.subjectCode" class="app-input app-input-compact" />
-        </label>
-        <label class="block">
-          <span class="mb-1 block text-sm text-[var(--color-text-secondary)]">动作名称</span>
-          <input v-model="form.actionName" class="app-input app-input-compact" />
-        </label>
-        <label class="block">
           <span class="mb-1 block text-sm text-[var(--color-text-secondary)]">Profile</span>
           <select v-model="profileIdValue" class="app-input app-input-compact">
             <option value="" disabled>请选择 Profile</option>
@@ -174,8 +166,6 @@ type TaskListQueryState = {
   taskNumber: string;
   profileKeyword: string;
   status: string;
-  subjectCode: string;
-  actionName: string;
   collectDateFrom: string;
   collectDateTo: string;
 };
@@ -214,9 +204,7 @@ const sortState = reactive<TaskSortState>({
 
 const form = reactive<CreateTaskRequest>({
   taskName: "",
-  subjectCode: "",
   profileId: null,
-  actionName: "",
   deviceType: "",
   modality: "",
   collectDate: "",
@@ -293,9 +281,7 @@ const emptyText = computed(() => {
 
 const advancedActive = computed(() => {
   const queryActive = Boolean(
-    listQuery.subjectCode ||
-      listQuery.actionName ||
-      listQuery.collectDateFrom ||
+    listQuery.collectDateFrom ||
       listQuery.collectDateTo,
   );
   return queryActive || sortState.field !== "createdAt" || sortState.order !== "desc" || pageState.pageSize !== 10;
@@ -321,8 +307,6 @@ function createDefaultQuery(): TaskListQueryState {
     taskNumber: "",
     profileKeyword: "",
     status: "",
-    subjectCode: "",
-    actionName: "",
     collectDateFrom: "",
     collectDateTo: "",
   };
@@ -341,8 +325,6 @@ function matchesTaskQuery(task: TaskResponse, query: TaskListQueryState) {
   const keyword = query.keyword.trim().toLowerCase();
   const taskNumber = query.taskNumber.trim().toLowerCase();
   const profileKeyword = query.profileKeyword.trim().toLowerCase();
-  const subjectCode = query.subjectCode.trim().toLowerCase();
-  const actionName = query.actionName.trim().toLowerCase();
 
   const matchesKeyword =
     !keyword ||
@@ -359,12 +341,10 @@ function matchesTaskQuery(task: TaskResponse, query: TaskListQueryState) {
     String(task.profileName || "").toLowerCase().includes(profileKeyword);
 
   const matchesStatus = !query.status || task.status === query.status;
-  const matchesSubject = !subjectCode || String(task.subjectCode || "").toLowerCase().includes(subjectCode);
-  const matchesAction = !actionName || String(task.actionName || "").toLowerCase().includes(actionName);
   const matchesFrom = !query.collectDateFrom || String(task.collectDate || "") >= query.collectDateFrom;
   const matchesTo = !query.collectDateTo || String(task.collectDate || "") <= query.collectDateTo;
 
-  return matchesKeyword && matchesTaskNumber && matchesProfile && matchesStatus && matchesSubject && matchesAction && matchesFrom && matchesTo;
+  return matchesKeyword && matchesTaskNumber && matchesProfile && matchesStatus && matchesFrom && matchesTo;
 }
 
 function sortTaskList(list: TaskResponse[], state: TaskSortState) {

@@ -2,7 +2,7 @@
   <div class="pb-root">
     <!-- top bar -->
     <header class="pb-topbar">
-      <button class="pb-back" @click="window.close()">← 关闭</button>
+      <button class="pb-back" @click="closeWindow">← 关闭</button>
       <div class="pb-info" v-if="data">
         <span class="pb-session">{{ data.sessionId }}</span>
         <span class="pb-sep">|</span>
@@ -83,7 +83,7 @@
         <template v-if="data && !loading && !apiError">
           <!-- DEBUG: 显示所有 source 的 URL -->
           <div class="pb-debug" v-if="false">
-            <pre>{{ JSON.stringify(data.sources, null, 2) }}</pre>
+            <pre>{{ JSON.stringify(data?.sources, null, 2) }}</pre>
           </div>
           <!-- videos -->
           <div class="pb-video-area">
@@ -104,7 +104,7 @@
                 <div class="pb-video-wrap">
                   <video
                     :ref="el => setVidRef(key, el)"
-                    :src="src.videoUrl"
+                    :src="src.videoUrl ?? undefined"
                     class="pb-video"
                     preload="auto"
                     controls
@@ -224,6 +224,7 @@ function fmt(ms: number | null | undefined): string {
 function fmtVal(v: number | undefined): string { return v != null ? v.toFixed(3) : "-"; }
 
 function setVidRef(key: string, el: any) { videoRefs[key] = el as HTMLVideoElement | null; }
+function closeWindow() { window.close(); }
 
 // frame tracking
 const videoFps = ref(20); // default, updated from video metadata

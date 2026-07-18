@@ -26,10 +26,6 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
 
-# Worker Pipeline 清单文件路径（相对于 backend 工作目录，也可通过环境变量覆盖）
-worker:
-  manifest-path: ${MMDP_WORKER_MANIFEST_PATH:../mmdp-worker/pipeline-manifest.json}
-
 storage:
   default-provider: ${MMDP_STORAGE_DEFAULT_PROVIDER:OSS}
   oss:

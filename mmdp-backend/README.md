@@ -88,7 +88,7 @@ ADD COLUMN storage_provider VARCHAR(32) NOT NULL DEFAULT 'OSS' COMMENT 'storage 
 ```bash
 curl -X POST "http://localhost:19021/api/tasks" \
   -H "Content-Type: application/json" \
-  -d "{\"taskName\":\"Demo Task 001\",\"subjectCode\":\"S001\",\"actionName\":\"Wave\",\"deviceType\":\"IMU_CLOTH\",\"modality\":\"IMU\",\"collectDate\":\"2026-05-14\",\"remark\":\"MVP smoke test\"}"
+  -d "{\"taskName\":\"Demo Task 001\",\"profileId\":1,\"collectDate\":\"2026-05-14\",\"remark\":\"MVP smoke test\"}"
 ```
 
 ### 2. Query task list

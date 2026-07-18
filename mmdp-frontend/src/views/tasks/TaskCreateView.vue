@@ -23,18 +23,6 @@
             <input v-model="form.operatorName" class="app-input" placeholder="e.g. operator-a" />
           </label>
           <label class="block">
-            <span class="mb-1.5 block text-sm font-medium text-slate-700">Subject Name</span>
-            <input v-model="form.subjectName" class="app-input" placeholder="e.g. subject-a" />
-          </label>
-          <label class="block">
-            <span class="mb-1.5 block text-sm font-medium text-slate-700">Subject Code (optional)</span>
-            <input v-model="form.subjectCode" class="app-input" placeholder="leave blank to auto-generate" />
-          </label>
-          <label class="block">
-            <span class="mb-1.5 block text-sm font-medium text-slate-700">Action Name</span>
-            <input v-model="form.actionName" required class="app-input" placeholder="e.g. walking" />
-          </label>
-          <label class="block">
             <span class="mb-1.5 block text-sm font-medium text-slate-700">Collect Date</span>
             <input v-model="form.collectDate" type="date" required class="app-input" />
           </label>
@@ -113,9 +101,6 @@ const profileIdValue = ref("");
 
 const form = reactive<CreateTaskRequest>({
   taskName: "",
-  subjectCode: "",
-  subjectName: "",
-  actionName: "",
   profileId: null,
   deviceType: "",
   modality: "",

@@ -12,6 +12,7 @@ public enum AssetType {
     SMPL_RESULT,
     SMPL_NPZ,
     PHYSICS_REPORT,
+    PHYSICS_REPORT_V2,
     MOTION_VIEWER_JSON,
     MOTION_FBX,
     ALIGNED_RESULT,
@@ -25,6 +26,13 @@ public enum AssetType {
     IMU_ALIGNED_CSV,
     ALIGNMENT_REPORT,
     QC_SUMMARY,
+
+    // G1 机器人遥操作数据
+    G1_ROBOT_HDF5,
+    G1_CAMERA_SVO2,
+    G1_MERGED_HDF5,
+    G1_LEROBOT_PARQUET,
+
     OTHER;
 
     public static AssetType fromNullable(String value) {

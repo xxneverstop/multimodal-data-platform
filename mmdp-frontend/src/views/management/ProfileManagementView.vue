@@ -83,7 +83,7 @@
     </div>
 
     <!-- pagination -->
-    <div v-if="pageState.total > 0" class="light2-pg">
+    <div v-if="filteredList.length > 0" class="light2-pg">
       <span>
         第 {{ pageState.page }} 页，共 {{ Math.max(1, totalPages) }} 页 &middot; 总计 {{ filteredList.length }} 条
       </span>

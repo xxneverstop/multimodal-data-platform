@@ -40,6 +40,7 @@ export interface AssetListItem {
   id: number;
   taskId: number;
   sessionId: string;
+  sourceKey?: string | null;
   taskName: string;
   assetName: string;
   fileName: string;

@@ -155,6 +155,7 @@ const functionItems: NavItem[] = [
   { label: "标注", to: "/annotation", icon: "tags" },
   { label: "质检", to: "/qc", icon: "shield" },
   { label: "导出", to: "/export", icon: "download" },
+  { label: "工具", to: "/tools/session-organizer", icon: "wrench" },
 ];
 
 const managementItems: NavItem[] = [

@@ -4,101 +4,215 @@
     <div class="light2-hdr">
       <div>
         <h1>数据标注</h1>
-        <p>查看标注任务并跳转到外部标注系统</p>
+        <p>管理动作数据的人工标注工作，标注入口在 Session 详情页或 3D 动作查看器中。</p>
       </div>
-      <button class="light2-btn light2-btn-primary" @click="dialogOpen = true">+ 新建标注</button>
     </div>
 
     <hr class="light2-divider" />
 
     <!-- filters -->
     <div class="light2-filters">
-      <input v-model="filters.taskId" type="text" placeholder="搜索 taskId..." class="light2-input" @keyup.enter="searchCount += 1" />
-      <input v-model="filters.sessionId" type="text" placeholder="搜索 sessionId..." class="light2-input" @keyup.enter="searchCount += 1" />
+      <input v-model="filters.sessionCode" type="text" placeholder="搜索 sessionCode..." class="light2-input" @keyup.enter="searchCount += 1" />
+      <input v-model="filters.taskName" type="text" placeholder="搜索任务名..." class="light2-input" @keyup.enter="searchCount += 1" />
       <button class="light2-btn light2-btn-primary light2-btn-sm" @click="searchCount += 1">搜索</button>
     </div>
 
+    <!-- loading -->
+    <div v-if="loading" class="light2-empty-state">正在加载标注数据...</div>
+
+    <!-- empty -->
+    <div v-else-if="!rows.length" class="light2-empty-state">
+      暂无需要标注的动作数据。请先在 Session 中运行「生成3D查看数据」处理任务。
+    </div>
+
     <!-- table -->
-    <div class="light2-tbl">
+    <div v-else class="light2-tbl">
       <table>
         <thead>
           <tr>
+            <th>Session</th>
             <th>任务名称</th>
-            <th>taskId</th>
-            <th>sessionId</th>
-            <th>关联资产</th>
+            <th>被试/动作</th>
+            <th>标注进度</th>
+            <th>评级分布</th>
             <th>状态</th>
-            <th>标签</th>
-            <th>更新时间</th>
             <th style="width:110px">操作</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in filteredTasks" :key="item.id">
-            <td style="font-weight:600">{{ item.name }}</td>
-            <td>{{ item.taskId }}</td>
-            <td>{{ item.sessionId }}</td>
-            <td>{{ item.assetName }}</td>
-            <td><span class="light2-badge" :class="badgeClass(item.annotationStatus)"><span class="light2-bdot" :style="{background:badgeColor(item.annotationStatus)}" />{{ item.annotationStatus }}</span></td>
-            <td>{{ item.annotationTag }}</td>
-            <td>{{ formatDateTime(item.updatedAt) }}</td>
-            <td><ExternalEntryButton :href="item.entryUrl" /></td>
+          <tr v-for="row in filteredRows" :key="row.sessionId">
+            <td>
+              <RouterLink
+                :to="`/sessions/${row.sessionId}`"
+                class="light2-info-card-link"
+              >
+                {{ row.sessionCode }}
+              </RouterLink>
+            </td>
+            <td>{{ row.taskName }}</td>
+            <td>{{ row.subjectCode }} / {{ row.actionName }}</td>
+            <td>
+              <div class="flex items-center gap-2">
+                <div class="light2-progress" style="width:80px">
+                  <div
+                    class="light2-progress-fill"
+                    :style="{ width: `${progressPercent(row)}%`, background: progressColor(progressPercent(row)) }"
+                  />
+                </div>
+                <span style="font-size:12px;color:var(--color-text-secondary)">{{ row.annotatedCount }}/{{ row.totalAssets }}</span>
+              </div>
+            </td>
+            <td style="font-size:12px">{{ distributionText(row) }}</td>
+            <td>
+              <span class="light2-badge" :class="badgeClass(row)">
+                <span class="light2-bdot" :style="{ background: badgeColor(row) }" />
+                {{ statusLabel(row) }}
+              </span>
+            </td>
+            <td>
+              <RouterLink
+                :to="`/sessions/${row.sessionId}`"
+                class="light2-btn light2-btn-primary light2-btn-sm"
+                style="text-decoration:none"
+              >
+                进入标注
+              </RouterLink>
+            </td>
           </tr>
         </tbody>
       </table>
     </div>
-
-    <!-- dialog -->
-    <AppDialog :open="dialogOpen" title="新建标注任务" description="先保留轻量字段。" @close="dialogOpen = false" @confirm="submitMock('标注任务已创建')">
-      <div class="grid gap-4 md:grid-cols-2">
-        <label class="block">
-          <span class="mb-1 block text-sm" style="color:var(--color-text-secondary)">任务名称</span>
-          <input v-model="dialogForm.name" class="app-input app-input-compact" />
-        </label>
-        <label class="block">
-          <span class="mb-1 block text-sm" style="color:var(--color-text-secondary)">标签</span>
-          <select v-model="dialogForm.tag" class="app-input app-input-compact">
-            <option value="有效">有效</option>
-            <option value="无效">无效</option>
-            <option value="异常动作">异常动作</option>
-            <option value="时间漂移">时间漂移</option>
-          </select>
-        </label>
-      </div>
-      <p v-if="dialogMessage" class="mt-3 text-sm" style="color:var(--color-text-tertiary)">{{ dialogMessage }}</p>
-    </AppDialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { fetchAnnotationTasks } from "@/api/platform";
-import AppDialog from "@/components/AppDialog.vue";
-import ExternalEntryButton from "@/components/ExternalEntryButton.vue";
-import type { AnnotationTaskRecord } from "@/types/platform";
+import { RouterLink } from "vue-router";
+import { fetchAllSessions } from "@/api/sessions";
+import { fetchSessionAnnotationProgress } from "@/api/annotation";
+import type { AnnotationProgressResponse } from "@/types/annotation";
+import type { SessionResponse } from "@/api/sessions";
 import { formatDateTime } from "@/utils/format";
 
-const tasks = ref<AnnotationTaskRecord[]>([]);
-const dialogOpen = ref(false);
-const dialogMessage = ref("");
-const searchCount = ref(0);
-const filters = reactive({ taskId: "", sessionId: "" });
-const dialogForm = reactive({ name: "", tag: "有效" });
-const filteredTasks = computed(() => tasks.value.filter((task) => (!filters.taskId || String(task.taskId).includes(filters.taskId.trim())) && (!filters.sessionId || task.sessionId.includes(filters.sessionId.trim()))));
-
-const BADGE_MAP: Record<string, { cls: string; color: string }> = {
-  进行中: { cls: "light2-badge-info", color: "var(--color-brand-500)" },
-  已完成: { cls: "light2-badge-ok", color: "#0d7d3e" },
-};
-function badgeClass(s: string) { return BADGE_MAP[s]?.cls ?? "light2-badge-neutral"; }
-function badgeColor(s: string) { return BADGE_MAP[s]?.color ?? "#9298a3"; }
-
-function submitMock(message: string) {
-  dialogMessage.value = message;
-  window.setTimeout(() => { dialogOpen.value = false; dialogMessage.value = ""; }, 600);
+interface AnnotationSessionRow {
+  sessionId: number;
+  sessionCode: string;
+  taskId: number;
+  taskName: string;
+  subjectCode: string;
+  actionName: string;
+  totalAssets: number;
+  annotatedCount: number;
+  inProgressCount: number;
+  unannotatedCount: number;
+  ratingDistribution: Record<string, number>;
+  updatedAt: string;
 }
 
-onMounted(async () => {
-  tasks.value = await fetchAnnotationTasks();
+const rows = ref<AnnotationSessionRow[]>([]);
+const loading = ref(true);
+const searchCount = ref(0);
+const filters = reactive({ sessionCode: "", taskName: "" });
+
+const filteredRows = computed(() =>
+  rows.value.filter(
+    (r) =>
+      (!filters.sessionCode ||
+        r.sessionCode
+          .toLowerCase()
+          .includes(filters.sessionCode.trim().toLowerCase())) &&
+      (!filters.taskName ||
+        r.taskName
+          .toLowerCase()
+          .includes(filters.taskName.trim().toLowerCase()))
+  )
+);
+
+const progressPercent = (row: AnnotationSessionRow) =>
+  row.totalAssets > 0
+    ? Math.round((row.annotatedCount / row.totalAssets) * 100)
+    : 0;
+
+const progressColor = (pct: number) => {
+  if (pct >= 80) return "#0d9444";
+  if (pct >= 40) return "#f59e0b";
+  return "#9298a3";
+};
+
+function badgeClass(
+  row: Pick<AnnotationSessionRow, "totalAssets" | "annotatedCount">
+) {
+  if (row.annotatedCount >= row.totalAssets && row.totalAssets > 0)
+    return "light2-badge-ok";
+  if (row.annotatedCount > 0) return "light2-badge-info";
+  return "light2-badge-neutral";
+}
+
+function badgeColor(
+  row: Pick<AnnotationSessionRow, "totalAssets" | "annotatedCount">
+) {
+  if (row.annotatedCount >= row.totalAssets && row.totalAssets > 0)
+    return "#0d7d3e";
+  if (row.annotatedCount > 0) return "var(--color-brand-500)";
+  return "#9298a3";
+}
+
+function statusLabel(
+  row: Pick<AnnotationSessionRow, "totalAssets" | "annotatedCount" | "inProgressCount">
+) {
+  if (row.annotatedCount >= row.totalAssets && row.totalAssets > 0) return "已完成";
+  if (row.annotatedCount > 0 || row.inProgressCount > 0) return "进行中";
+  return "未开始";
+}
+
+function distributionText(row: AnnotationSessionRow) {
+  if (!row.ratingDistribution || Object.keys(row.ratingDistribution).length === 0) return "-";
+  return Object.entries(row.ratingDistribution)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([r, c]) => `${r}:${c}`)
+    .join(" ");
+}
+
+async function loadData() {
+  loading.value = true;
+  try {
+    const sessions: SessionResponse[] = await fetchAllSessions();
+    const progressResults = await Promise.allSettled(
+      sessions.map((s) => fetchSessionAnnotationProgress(s.id))
+    );
+
+    const result: AnnotationSessionRow[] = [];
+    for (let i = 0; i < sessions.length; i++) {
+      const s = sessions[i];
+      const p = progressResults[i];
+      const progress: AnnotationProgressResponse | null =
+        p.status === "fulfilled" ? p.value : null;
+
+      // 只显示有动作资产的 session（totalAssets > 0）
+      if (progress && progress.totalAssets > 0) {
+        result.push({
+          sessionId: s.id,
+          sessionCode: s.sessionCode || `#${s.id}`,
+          taskId: s.taskId,
+          taskName: s.taskName || "-",
+          subjectCode: s.subjectCode || "-",
+          actionName: s.actionName || "-",
+          totalAssets: progress.totalAssets,
+          annotatedCount: progress.annotatedCount,
+          inProgressCount: progress.inProgressCount,
+          unannotatedCount: progress.unannotatedCount,
+          ratingDistribution: progress.ratingDistribution,
+          updatedAt: "", // session 没有 updatedAt
+        });
+      }
+    }
+    rows.value = result;
+  } finally {
+    loading.value = false;
+  }
+}
+
+onMounted(() => {
+  loadData();
 });
 </script>
