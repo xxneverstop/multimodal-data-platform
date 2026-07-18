@@ -28,6 +28,7 @@ mmdp-frontend/node_modules/
 mmdp-frontend/dist/
 mmdp-frontend/.vite/
 mmdp-frontend/.cache/
+mmdp-frontend/.agents/
 
 # Backend
 mmdp-backend/target/
@@ -38,3 +39,12 @@ deploy/.env
 deploy/backend/*.jar
 deploy/frontend/dist/
 deploy/worker/src/
+deploy/python3-10-slim.tar
+deploy/worker/smpl_models/
+docs/deployment/*.html
+docs/deployment/*.png
+
+# Worker local assets
+mmdp-worker/*.whl
+mmdp-worker/test-*.py
+**/__pycache__/
