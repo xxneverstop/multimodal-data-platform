@@ -16,6 +16,8 @@ import com.honortech.dataplatform.pipeline.mapper.PipelineDefinitionMapper;
 import com.honortech.dataplatform.pipeline.mapper.ProfilePipelineMapper;
 import com.honortech.dataplatform.session.entity.CollectionSession;
 import com.honortech.dataplatform.session.mapper.CollectionSessionMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,8 @@ import java.util.List;
 @Service
 public class PipelineDefinitionServiceImpl implements PipelineDefinitionService {
 
+    private static final Logger log = LoggerFactory.getLogger(PipelineDefinitionServiceImpl.class);
+
     private static final TypeReference<List<String>> STRING_LIST_TYPE = new TypeReference<>() {};
 
     private final PipelineDefinitionMapper pipelineMapper;
@@ -34,18 +38,21 @@ public class PipelineDefinitionServiceImpl implements PipelineDefinitionService 
     private final CollectionSessionMapper sessionMapper;
     private final DataAssetService dataAssetService;
     private final ObjectMapper objectMapper;
+    private final com.honortech.dataplatform.processing.service.WorkerPipelineRegistry workerPipelineRegistry;
 
     public PipelineDefinitionServiceImpl(
             PipelineDefinitionMapper pipelineMapper,
             ProfilePipelineMapper profilePipelineMapper,
             CollectionSessionMapper sessionMapper,
             DataAssetService dataAssetService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            com.honortech.dataplatform.processing.service.WorkerPipelineRegistry workerPipelineRegistry) {
         this.pipelineMapper = pipelineMapper;
         this.profilePipelineMapper = profilePipelineMapper;
         this.sessionMapper = sessionMapper;
         this.dataAssetService = dataAssetService;
         this.objectMapper = objectMapper;
+        this.workerPipelineRegistry = workerPipelineRegistry;
     }
 
     @Override
@@ -161,8 +168,19 @@ public class PipelineDefinitionServiceImpl implements PipelineDefinitionService 
                 .distinct()
                 .toList();
 
-        // 过滤：session 有足够输入资产的 pipeline 才返回
-        return pipelines.stream()
+        // 过滤：仅保留 Worker 已注册的 Pipeline，再按输入资产匹配
+        List<PipelineDefinition> workerReady = pipelines.stream()
+                .filter(p -> workerPipelineRegistry.isRegistered(p.getPipelineId()))
+                .toList();
+
+        if (workerReady.isEmpty() && !pipelines.isEmpty()) {
+            log.warn("[可用Pipeline] Session {} 有 {} 个DB Pipeline，但无一被Worker注册. Worker已注册({}): {}",
+                    sessionId, pipelines.size(),
+                    workerPipelineRegistry.getRegisteredIds().size(),
+                    workerPipelineRegistry.getRegisteredIds());
+        }
+
+        return workerReady.stream()
                 .filter(p -> hasRequiredInputs(p, existingAssetTypes))
                 .map(this::toResponse)
                 .toList();

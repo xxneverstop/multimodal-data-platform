@@ -161,14 +161,6 @@
             <input v-model="newTaskForm.taskName" class="app-input app-input-compact w-full" placeholder="例如：行走采集-001" />
           </label>
           <label class="block">
-            <span class="mb-1 block text-xs text-slate-500">Subject Code <span class="text-red-400">*</span></span>
-            <input v-model="newTaskForm.subjectCode" class="app-input app-input-compact w-full" placeholder="SUBJ-001" />
-          </label>
-          <label class="block">
-            <span class="mb-1 block text-xs text-slate-500">Action Name <span class="text-red-400">*</span></span>
-            <input v-model="newTaskForm.actionName" class="app-input app-input-compact w-full" placeholder="walking" />
-          </label>
-          <label class="block">
             <span class="mb-1 block text-xs text-slate-500">Profile <span class="text-red-400">*</span></span>
             <select v-model="newTaskProfileId" class="app-input app-input-compact w-full">
               <option value="" disabled>请选择 Profile</option>
@@ -449,8 +441,6 @@ const showNewTaskDialog = ref(false);
 const newTaskProfileId = ref("");
 const newTaskForm = reactive({
   taskName: "",
-  subjectCode: "",
-  actionName: "",
   deviceType: "双目相机+HMD+IMU",
   modality: "多模态",
   collectDate: new Date().toISOString().slice(0, 10),
@@ -577,8 +567,6 @@ async function handleCreateTask() {
   try {
     const created = await createTask({
       taskName: newTaskForm.taskName.trim(),
-      subjectCode: newTaskForm.subjectCode.trim(),
-      actionName: newTaskForm.actionName.trim(),
       profileId: profile.id,
       deviceType: profile.deviceGroupCode,
       modality: profile.modalityGroupCode,

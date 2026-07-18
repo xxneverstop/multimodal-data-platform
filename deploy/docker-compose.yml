@@ -61,6 +61,8 @@ services:
       MMDP_OSS_BUCKET: ${MMDP_OSS_BUCKET}
       MMDP_WORKER_WORK_DIR: ${MMDP_WORKER_WORK_DIR:-/tmp/mmdp-worker}
       MMDP_WORKER_POLL_INTERVAL: ${MMDP_WORKER_POLL_INTERVAL:-5}
+      MMDP_SMPL_MODEL_DIR: ${MMDP_SMPL_MODEL_DIR:-/app/smpl_models}
+      MMDP_PHYSICS_DEVICE: ${MMDP_PHYSICS_DEVICE:-cpu}
     networks:
       - mmdp-net
 

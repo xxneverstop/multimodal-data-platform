@@ -3,9 +3,15 @@ package com.honortech.dataplatform.processing.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.honortech.dataplatform.asset.dto.CreateDerivedAssetRequest;
 import com.honortech.dataplatform.asset.entity.DataAsset;
+import com.honortech.dataplatform.asset.mapper.DataAssetMapper;
 import com.honortech.dataplatform.asset.service.DataAssetService;
 import com.honortech.dataplatform.common.enums.AssetSourceType;
 import com.honortech.dataplatform.common.exception.BizException;
+import com.honortech.dataplatform.common.storage.StorageProperties;
+import com.honortech.dataplatform.common.storage.StorageRouter;
+import com.honortech.dataplatform.file.mapper.DataFileMapper;
+import com.honortech.dataplatform.pipeline.entity.PipelineDefinition;
+import com.honortech.dataplatform.pipeline.mapper.PipelineDefinitionMapper;
 import com.honortech.dataplatform.processing.PipelineIds;
 import com.honortech.dataplatform.processing.dto.CreateManualProcessingJobRequest;
 import com.honortech.dataplatform.processing.dto.CreateProcessingJobRequest;
@@ -15,6 +21,7 @@ import com.honortech.dataplatform.processing.entity.AssetLineage;
 import com.honortech.dataplatform.processing.entity.ProcessingJob;
 import com.honortech.dataplatform.processing.mapper.AssetLineageMapper;
 import com.honortech.dataplatform.processing.mapper.ProcessingJobMapper;
+import com.honortech.dataplatform.session.mapper.CollectionSessionMapper;
 import com.honortech.dataplatform.task.entity.AcquisitionTask;
 import com.honortech.dataplatform.task.service.AcquisitionTaskService;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,9 +43,16 @@ class ProcessingJobServiceImplTest {
     private final ProcessingJobMapper processingJobMapper = Mockito.mock(ProcessingJobMapper.class);
     private final AcquisitionTaskService acquisitionTaskService = Mockito.mock(AcquisitionTaskService.class);
     private final DataAssetService dataAssetService = Mockito.mock(DataAssetService.class);
+    private final DataAssetMapper dataAssetMapper = Mockito.mock(DataAssetMapper.class);
     private final ProcessingJobExecutor processingJobExecutor = Mockito.mock(ProcessingJobExecutor.class);
     private final AssetLineageMapper assetLineageMapper = Mockito.mock(AssetLineageMapper.class);
+    private final CollectionSessionMapper sessionMapper = Mockito.mock(CollectionSessionMapper.class);
+    private final DataFileMapper dataFileMapper = Mockito.mock(DataFileMapper.class);
+    private final PipelineDefinitionMapper pipelineDefMapper = Mockito.mock(PipelineDefinitionMapper.class);
+    private final StorageRouter storageRouter = Mockito.mock(StorageRouter.class);
+    private final StorageProperties storageProperties = Mockito.mock(StorageProperties.class);
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final WorkerPipelineRegistry workerPipelineRegistry = Mockito.mock(WorkerPipelineRegistry.class);
     private final List<AssetLineage> storedLineages = new ArrayList<>();
     private ProcessingJobServiceImpl service;
 
@@ -48,13 +62,22 @@ class ProcessingJobServiceImplTest {
                 processingJobMapper,
                 acquisitionTaskService,
                 dataAssetService,
+                dataAssetMapper,
                 processingJobExecutor,
                 assetLineageMapper,
-                objectMapper
+                sessionMapper,
+                dataFileMapper,
+                pipelineDefMapper,
+                storageRouter,
+                storageProperties,
+                objectMapper,
+                workerPipelineRegistry
         );
         AcquisitionTask task = new AcquisitionTask();
         task.setId(1L);
         when(acquisitionTaskService.getTask(1L)).thenReturn(task);
+        // validatePipelineId() 需要 pipelineDefMapper 返回有效记录
+        when(pipelineDefMapper.selectOne(any())).thenReturn(validPipelineDef());
         doAnswer(invocation -> {
             ProcessingJob job = invocation.getArgument(0);
             job.setId(99L);
@@ -177,6 +200,15 @@ class ProcessingJobServiceImplTest {
         )));
 
         assertEquals("Each output asset must provide exactly one of fileId or externalPath", exception.getMessage());
+    }
+
+    private PipelineDefinition validPipelineDef() {
+        PipelineDefinition def = new PipelineDefinition();
+        def.setPipelineId(PipelineIds.RGB_MOCAP_ALIGNMENT);
+        def.setEnabled(1);
+        def.setDisplayName("RGB Mocap对齐");
+        def.setExecutorType("PYTHON_WORKER");
+        return def;
     }
 
     private DataAsset asset(Long id, String assetType) {

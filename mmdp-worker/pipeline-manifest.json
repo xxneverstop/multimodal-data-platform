@@ -1,118 +1,172 @@
 [
   {
-    "pipeline_id": "BUILD_LOOPED_PLAYBACK",
-    "display_name": "图像序列 → 循环 MP4（x10）",
+    "pipelineId": "BUILD_LOOPED_PLAYBACK",
+    "displayName": "图像序列 → 循环 MP4（x10）",
     "description": "将图像序列合成为 MP4 视频后，使用 -stream_loop 将视频循环播放 10 次，输出加长版 MP4",
     "version": "1.0.0",
-    "input_asset_types": [
+    "inputAssetTypes": [
       "RGB_SEQ_RAW",
       "LEFT_IMAGE_SEQUENCE",
       "RIGHT_IMAGE_SEQUENCE"
     ],
-    "output_asset_types": [
+    "outputAssetTypes": [
       "RGB_VIDEO_MP4"
     ],
-    "runtime_dependencies": [
+    "runtimeDependencies": [
       "ffmpeg"
     ]
   },
   {
-    "pipeline_id": "BUILD_MOTION_VIEWER_DATA",
-    "display_name": "生成3D查看数据",
+    "pipelineId": "BUILD_MOTION_VIEWER_DATA",
+    "displayName": "生成3D查看数据",
     "description": "将 SMPL NPZ 动作数据转换为前端 Three.js 查看器所需的帧数据 JSON，兼容 motion_vis 渲染管线",
     "version": "1.0.0",
-    "input_asset_types": [
+    "inputAssetTypes": [
       "SMPL_NPZ"
     ],
-    "output_asset_types": [
+    "outputAssetTypes": [
       "MOTION_VIEWER_JSON"
     ],
-    "runtime_dependencies": [
+    "runtimeDependencies": [
       "numpy"
     ]
   },
   {
-    "pipeline_id": "BUILD_PLAYBACK",
-    "display_name": "图像序列 → MP4 视频",
+    "pipelineId": "BUILD_PLAYBACK",
+    "displayName": "图像序列 → MP4 视频",
     "description": "将按帧命名的 JPG/PNG 图像序列目录合成为 MP4 视频文件，支持 %06d 和 concat 两种模式",
     "version": "1.0.0",
-    "input_asset_types": [
+    "inputAssetTypes": [
       "RGB_SEQ_RAW",
       "LEFT_IMAGE_SEQUENCE",
       "RIGHT_IMAGE_SEQUENCE"
     ],
-    "output_asset_types": [
+    "outputAssetTypes": [
       "RGB_VIDEO_MP4"
     ],
-    "runtime_dependencies": [
+    "runtimeDependencies": [
       "ffmpeg"
     ]
   },
   {
-    "pipeline_id": "BUILD_PLAYBACK_BUNDLE",
-    "display_name": "播放包+质检",
+    "pipelineId": "BUILD_PLAYBACK_BUNDLE",
+    "displayName": "播放包+质检",
     "description": "校验左右视频帧数一致性、IMU覆盖完整性、丢帧检测，生成QC质检报告",
     "version": "1.0.0",
-    "input_asset_types": [
+    "inputAssetTypes": [
       "RGB_VIDEO_MP4",
       "IMU_ALIGNED_CSV",
       "ALIGNMENT_REPORT"
     ],
-    "output_asset_types": [
+    "outputAssetTypes": [
       "QC_SUMMARY"
     ],
-    "runtime_dependencies": [
+    "runtimeDependencies": [
       "ffprobe"
     ]
   },
   {
-    "pipeline_id": "BUILD_STEREO_MP4",
-    "display_name": "双目帧序列->MP4",
+    "pipelineId": "BUILD_STEREO_MP4",
+    "displayName": "双目帧序列->MP4",
     "description": "将对齐后的左/右图像序列分别合成为MP4视频，优先使用aligned/子目录",
     "version": "1.0.0",
-    "input_asset_types": [
+    "inputAssetTypes": [
       "LEFT_IMAGE_SEQUENCE",
       "RIGHT_IMAGE_SEQUENCE"
     ],
-    "output_asset_types": [
+    "outputAssetTypes": [
       "RGB_VIDEO_MP4"
     ],
-    "runtime_dependencies": [
+    "runtimeDependencies": [
       "ffmpeg"
     ]
   },
   {
-    "pipeline_id": "MOTION_PHYSICS_METRICS",
-    "display_name": "动作物理指标计算",
+    "pipelineId": "G1_CONVERT_TO_LEROBOT",
+    "displayName": "G1数据→LeRobot训练格式",
+    "description": "将合并后的G1 HDF5数据转换为LeRobot VLA训练格式（Parquet+Video），支持批量流式转换",
+    "version": "1.0.0",
+    "inputAssetTypes": [
+      "G1_MERGED_HDF5"
+    ],
+    "outputAssetTypes": [
+      "G1_LEROBOT_PARQUET"
+    ],
+    "runtimeDependencies": [
+      "lerobot",
+      "h5py",
+      "numpy",
+      "opencv-python"
+    ]
+  },
+  {
+    "pipelineId": "G1_MERGE_CAMERA_ROBOT",
+    "displayName": "G1相机-机器人数据合并",
+    "description": "将ZED双目相机SVO2数据与机器人HDF5遥操作数据合并：时间戳对齐、图像JPEG压缩、计算delta EEF/delta Height",
+    "version": "1.0.0",
+    "inputAssetTypes": [
+      "G1_ROBOT_HDF5",
+      "G1_CAMERA_SVO2"
+    ],
+    "outputAssetTypes": [
+      "G1_MERGED_HDF5"
+    ],
+    "runtimeDependencies": [
+      "pyzed",
+      "h5py",
+      "numpy",
+      "scipy",
+      "opencv-python"
+    ]
+  },
+  {
+    "pipelineId": "MOTION_PHYSICS_METRICS",
+    "displayName": "动作物理指标计算",
     "description": "对 SMPL NPZ 动作文件计算抖动(jitter)、地面穿透(penetration)、浮空(floating)、位移范围等物理质量指标，产出 JSON 报告",
     "version": "1.0.0",
-    "input_asset_types": [
+    "inputAssetTypes": [
       "SMPL_NPZ"
     ],
-    "output_asset_types": [
+    "outputAssetTypes": [
       "PHYSICS_REPORT"
     ],
-    "runtime_dependencies": [
+    "runtimeDependencies": [
       "numpy"
     ]
   },
   {
-    "pipeline_id": "STEREO_IMU_ALIGN",
-    "display_name": "双目+IMU 时间对齐",
+    "pipelineId": "MOTION_PHYSICS_METRICS_V2",
+    "displayName": "动作物理指标计算V2",
+    "description": "基于SMPL BodyModel前向计算的完整物理质量指标：穿透/浮空/滑动/关节跳变/手腕扭曲/抖动，需要torch和SMPL-H模型文件",
+    "version": "2.0.0",
+    "inputAssetTypes": [
+      "SMPL_NPZ"
+    ],
+    "outputAssetTypes": [
+      "PHYSICS_REPORT_V2"
+    ],
+    "runtimeDependencies": [
+      "torch",
+      "numpy"
+    ]
+  },
+  {
+    "pipelineId": "STEREO_IMU_ALIGN",
+    "displayName": "双目+IMU 时间对齐",
     "description": "读取帧时间戳CSV，对齐左右帧和IMU的时间窗口，IMU线性插值到帧时间戳",
     "version": "1.0.0",
-    "input_asset_types": [
+    "inputAssetTypes": [
       "LEFT_IMAGE_SEQUENCE",
       "RIGHT_IMAGE_SEQUENCE",
       "RAW_IMU_CSV",
       "FRAME_TIMESTAMPS_CSV"
     ],
-    "output_asset_types": [
+    "outputAssetTypes": [
       "LEFT_IMAGE_SEQUENCE",
       "RIGHT_IMAGE_SEQUENCE",
       "IMU_ALIGNED_CSV",
       "ALIGNMENT_REPORT"
     ],
-    "runtime_dependencies": []
+    "runtimeDependencies": []
   }
 ]

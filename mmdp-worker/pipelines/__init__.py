@@ -24,8 +24,8 @@ def _discover_pipelines() -> Dict[str, BasePipeline]:
     package_dir = os.path.dirname(__file__)
 
     for _, module_name, _ in pkgutil.iter_modules([package_dir]):
-        # 跳过私有模块和基类模块
-        if module_name.startswith("_") or module_name == "base":
+        # 跳过私有模块、基类模块和非 Pipeline 子包
+        if module_name.startswith("_") or module_name in ("base", "body_model"):
             continue
 
         try:

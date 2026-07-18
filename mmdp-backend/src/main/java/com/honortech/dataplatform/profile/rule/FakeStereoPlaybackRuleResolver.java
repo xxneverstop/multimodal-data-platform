@@ -7,6 +7,7 @@ import com.honortech.dataplatform.profile.entity.CollectionProfileSource;
 import com.honortech.dataplatform.session.dto.SessionPlaybackResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -20,6 +21,7 @@ import java.util.Map;
  * 要求同时满足 video + imu 两类 source 才判定可播放。
  */
 @Component
+@Order(0)
 public class FakeStereoPlaybackRuleResolver implements PlaybackRuleResolver {
 
     private static final Logger log = LoggerFactory.getLogger(FakeStereoPlaybackRuleResolver.class);

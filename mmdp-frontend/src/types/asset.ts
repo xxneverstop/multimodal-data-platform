@@ -14,6 +14,14 @@ export type AssetType =
   | "FRAME_TIMESTAMPS_CSV"
   | "DEPTH_RAW"
   | "POSE_CACHE"
+  | "IMU_ALIGNED_CSV"
+  | "ALIGNMENT_REPORT"
+  | "QC_SUMMARY"
+  | "SMPL_NPZ"
+  | "PHYSICS_REPORT"
+  | "PHYSICS_REPORT_V2"
+  | "MOTION_VIEWER_JSON"
+  | "MOTION_FBX"
   | "OTHER";
 
 export interface DataAssetResponse {

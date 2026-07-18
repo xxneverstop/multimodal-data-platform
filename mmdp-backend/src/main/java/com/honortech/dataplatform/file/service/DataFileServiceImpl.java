@@ -324,6 +324,7 @@ public class DataFileServiceImpl implements DataFileService {
         }
         Subject subject = task.getSubjectId() != null ? subjectService.findById(task.getSubjectId()) : null;
         String subjectCode = subject != null ? subject.getSubjectCode() : "";
+        String actionName = task.getActionName() != null ? task.getActionName() : "";
         CollectionSession session = new CollectionSession();
         session.setSessionCode(businessCodeGenerator.next("SESS"));
         session.setTaskId(taskId);
@@ -331,7 +332,7 @@ public class DataFileServiceImpl implements DataFileService {
         session.setSessionId(UUID.randomUUID().toString());
         session.setSubjectCode(subjectCode);
         session.setSubjectCodeSnapshot(subjectCode);
-        session.setActionName(task.getActionName());
+        session.setActionName(actionName);
         session.setProfileId(task.getProfileId());
         session.setStartedAt(LocalDateTime.now());
         session.setUploadStatus("RECEIVED");

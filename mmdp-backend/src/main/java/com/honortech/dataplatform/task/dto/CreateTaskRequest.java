@@ -7,9 +7,9 @@ import java.time.LocalDate;
 
 public record CreateTaskRequest(
         @NotBlank String taskName,
-        @NotBlank String subjectCode,
+        String subjectCode,
         String subjectName,
-        @NotBlank String actionName,
+        String actionName,
         @NotNull Long profileId,
         String deviceType,
         String modality,

@@ -68,9 +68,9 @@ CREATE TABLE IF NOT EXISTS acquisition_task (
     task_code VARCHAR(64) NOT NULL COMMENT '平台任务编号',
     task_name VARCHAR(128) NOT NULL COMMENT '采集任务名称',
     subject_id BIGINT NULL COMMENT '关联被试ID',
-    subject_code VARCHAR(64) NOT NULL COMMENT '兼容字段：被试编号',
+    subject_code VARCHAR(64) NULL COMMENT '被试编号（可选，优先从Session获取）',
     subject_code_snapshot VARCHAR(64) NULL COMMENT '被试编号快照',
-    action_name VARCHAR(128) NOT NULL COMMENT '采集动作名称',
+    action_name VARCHAR(128) NULL COMMENT '采集动作名称（可选，优先从Session获取）',
     device_type VARCHAR(64) NOT NULL COMMENT '兼容字段：采集设备类型',
     modality VARCHAR(32) NOT NULL COMMENT '兼容字段：数据模态类型',
     collect_date DATE NOT NULL COMMENT '采集日期',
@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS collection_session (
     CONSTRAINT fk_session_collector_client FOREIGN KEY (collector_client_id) REFERENCES collector_client(id),
     UNIQUE INDEX uk_session_code (session_code),
     UNIQUE INDEX idx_session_id (session_id),
+    INDEX fk_session_subject (subject_id),
     INDEX idx_session_task_id (task_id),
     INDEX idx_session_profile_id (profile_id),
     INDEX idx_session_collector_client_id (collector_client_id)
@@ -148,6 +149,7 @@ CREATE TABLE IF NOT EXISTS data_file (
     created_at DATETIME NOT NULL COMMENT '创建时间',
     CONSTRAINT fk_data_file_task FOREIGN KEY (task_id) REFERENCES acquisition_task(id),
     CONSTRAINT fk_data_file_session FOREIGN KEY (session_id) REFERENCES collection_session(id),
+    INDEX fk_data_file_task (task_id),
     INDEX idx_data_file_session_id (session_id),
     INDEX idx_data_file_source_key (source_key),
     INDEX idx_data_file_sha256 (sha256)
@@ -166,6 +168,8 @@ CREATE TABLE IF NOT EXISTS qc_report (
     CONSTRAINT fk_qc_report_task FOREIGN KEY (task_id) REFERENCES acquisition_task(id),
     CONSTRAINT fk_qc_report_session FOREIGN KEY (session_id) REFERENCES collection_session(id),
     CONSTRAINT fk_qc_report_file FOREIGN KEY (file_id) REFERENCES data_file(id),
+    INDEX fk_qc_report_task (task_id),
+    INDEX fk_qc_report_file (file_id),
     INDEX idx_qc_report_session_id (session_id)
 ) COMMENT='质检报告表';
 
@@ -185,9 +189,9 @@ CREATE TABLE IF NOT EXISTS processing_job (
     tool_version VARCHAR(64) NULL COMMENT '工具版本',
     log_path VARCHAR(512) NULL COMMENT '日志路径',
     remark VARCHAR(512) NULL COMMENT '备注',
-    depends_on_job_ids VARCHAR(512) NULL COMMENT '依赖的前置Job ID列表(JSON数组)',
     created_at DATETIME NOT NULL COMMENT '创建时间',
     updated_at DATETIME NOT NULL COMMENT '更新时间',
+    depends_on_job_ids VARCHAR(512) NULL COMMENT '依赖的前置Job ID列表(JSON数组), 如[1,2], NULL表示无前置依赖',
     CONSTRAINT fk_processing_job_task FOREIGN KEY (task_id) REFERENCES acquisition_task(id),
     CONSTRAINT fk_processing_job_session FOREIGN KEY (session_id) REFERENCES collection_session(id),
     INDEX idx_processing_job_session_id (session_id),
@@ -214,6 +218,8 @@ CREATE TABLE IF NOT EXISTS data_asset (
     CONSTRAINT fk_data_asset_task FOREIGN KEY (task_id) REFERENCES acquisition_task(id),
     CONSTRAINT fk_data_asset_session FOREIGN KEY (session_id) REFERENCES collection_session(id),
     CONSTRAINT fk_data_asset_file FOREIGN KEY (file_id) REFERENCES data_file(id),
+    INDEX fk_data_asset_task (task_id),
+    INDEX fk_data_asset_file (file_id),
     INDEX idx_data_asset_session_id (session_id),
     INDEX idx_data_asset_source_key (source_key),
     INDEX idx_data_asset_asset_type (asset_type)
@@ -233,6 +239,10 @@ CREATE TABLE IF NOT EXISTS asset_lineage (
     CONSTRAINT fk_asset_lineage_source_asset FOREIGN KEY (source_asset_id) REFERENCES data_asset(id),
     CONSTRAINT fk_asset_lineage_target_asset FOREIGN KEY (target_asset_id) REFERENCES data_asset(id),
     CONSTRAINT fk_asset_lineage_job FOREIGN KEY (job_id) REFERENCES processing_job(id),
+    INDEX fk_asset_lineage_task (task_id),
+    INDEX fk_asset_lineage_source_asset (source_asset_id),
+    INDEX fk_asset_lineage_target_asset (target_asset_id),
+    INDEX fk_asset_lineage_job (job_id),
     INDEX idx_asset_lineage_session_id (session_id)
 ) COMMENT='资产血缘表';
 
@@ -256,8 +266,12 @@ CREATE TABLE IF NOT EXISTS session_import_record (
     CONSTRAINT fk_session_import_record_collector_client FOREIGN KEY (collector_client_id) REFERENCES collector_client(id),
     CONSTRAINT fk_session_import_record_archive_file FOREIGN KEY (archive_file_id) REFERENCES data_file(id),
     UNIQUE INDEX idx_session_import_local_session_id (local_session_id),
+    INDEX fk_session_import_record_task (task_id),
+    INDEX fk_session_import_record_session (session_record_id),
+    INDEX fk_session_import_record_archive_file (archive_file_id),
     INDEX idx_import_collector_client_id (collector_client_id)
 ) COMMENT='Session导入记录表';
+
 CREATE TABLE IF NOT EXISTS sys_user (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '用户主键ID',
     username VARCHAR(64) NOT NULL COMMENT '登录账号',
@@ -277,6 +291,28 @@ CREATE TABLE IF NOT EXISTS sys_user (
     INDEX idx_sys_user_role_code (role_code),
     INDEX idx_sys_user_status (status)
 ) COMMENT='平台用户表';
+
+CREATE TABLE IF NOT EXISTS motion_annotation (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '标注记录主键ID',
+    asset_id BIGINT NOT NULL COMMENT '关联数据资产ID',
+    status VARCHAR(32) NOT NULL DEFAULT 'UNANNOTATED' COMMENT '标注状态: UNANNOTATED/IN_PROGRESS/ANNOTATED',
+    quality_rating VARCHAR(8) NULL COMMENT '质量评级: A/B/C/D',
+    motion_tags JSON NULL COMMENT '动作标签JSON数组',
+    frame_issues JSON NULL COMMENT '帧级问题标注JSON数组',
+    overall_comment VARCHAR(1024) NULL COMMENT '综合评语',
+    annotator_id BIGINT NULL COMMENT '标注人用户ID',
+    version INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    motiondb_defects JSON NULL COMMENT 'MotionDB风格缺陷评估: {testSet,flatScene,jointJump,jointDeformity,sliding,floatPenetrate,displacementMissing,temporalConsistency}',
+    text_descriptions JSON NULL COMMENT '多条文本描述JSON数组',
+    CONSTRAINT fk_annotation_asset FOREIGN KEY (asset_id) REFERENCES data_asset(id) ON DELETE CASCADE,
+    CONSTRAINT fk_annotation_annotator FOREIGN KEY (annotator_id) REFERENCES sys_user(id),
+    UNIQUE INDEX uk_annotation_asset_id (asset_id),
+    INDEX fk_annotation_annotator (annotator_id),
+    INDEX idx_annotation_status (status),
+    INDEX idx_annotation_quality_rating (quality_rating)
+) COMMENT='动作标注表,与data_asset一对一';
 
 CREATE TABLE IF NOT EXISTS pipeline_definition (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'Pipeline主键ID',
@@ -300,5 +336,6 @@ CREATE TABLE IF NOT EXISTS profile_pipeline (
     created_at DATETIME NOT NULL COMMENT '创建时间',
     CONSTRAINT fk_pp_profile FOREIGN KEY (profile_id) REFERENCES collection_profile(id),
     CONSTRAINT fk_pp_pipeline FOREIGN KEY (pipeline_id) REFERENCES pipeline_definition(pipeline_id),
-    UNIQUE INDEX uk_profile_pipeline (profile_id, pipeline_id)
+    UNIQUE INDEX uk_profile_pipeline (profile_id, pipeline_id),
+    INDEX fk_pp_pipeline (pipeline_id)
 ) COMMENT='Profile与Pipeline关联表';

@@ -1,54 +1,38 @@
 package com.honortech.dataplatform.processing.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.honortech.dataplatform.pipeline.dto.WorkerPipelineInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.io.File;
-import java.util.Collections;
 import java.util.List;
 
 /**
- * Worker Manifest 文件读取服务。
- * 直接读取 Python Worker 启动时生成的 pipeline-manifest.json，
- * 无需 Worker 主动向 Backend 注册，消除序列化通道的可靠性问题。
+ * Worker Pipeline 清单查询服务。
+ * 从 WorkerPipelineRegistry 内存注册表读取（Worker 启动时主动注册），
+ * 不再依赖 pipeline-manifest.json 文件读取。
  */
 @Service
 public class WorkerManifestService {
 
     private static final Logger log = LoggerFactory.getLogger(WorkerManifestService.class);
 
-    private final File manifestFile;
+    private final WorkerPipelineRegistry registry;
 
-    public WorkerManifestService(
-            @Value("${worker.manifest-path:../mmdp-worker/pipeline-manifest.json}")
-            String manifestPath) {
-        this.manifestFile = new File(manifestPath);
-        log.info("Worker manifest path: {}", manifestFile.getAbsolutePath());
+    public WorkerManifestService(WorkerPipelineRegistry registry) {
+        this.registry = registry;
+        log.info("WorkerManifestService 已初始化（从内存注册表读取）");
     }
 
     /**
-     * 读取 pipeline-manifest.json 并解析为 Pipeline 元数据列表。
-     * 文件不存在或解析失败时返回空列表，不抛异常。
+     * 获取 Worker 端已注册的 Pipeline 清单。
+     * 注册表为空时返回空列表（Worker 可能尚未启动或已失联）。
      */
     public List<WorkerPipelineInfo> getAvailablePipelines() {
-        if (!manifestFile.exists()) {
-            log.warn("Manifest file not found: {}", manifestFile.getAbsolutePath());
-            return Collections.emptyList();
+        List<WorkerPipelineInfo> pipelines = registry.getAll();
+        if (pipelines.isEmpty()) {
+            log.warn("Worker Pipeline 注册表为空，Worker 可能尚未启动");
         }
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            // Python 端使用 snake_case，Jackson 需要显式配置映射策略
-            mapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
-            return mapper.readValue(manifestFile, new TypeReference<List<WorkerPipelineInfo>>() {});
-        } catch (Exception e) {
-            log.error("Failed to parse manifest file: {}", e.getMessage());
-            return Collections.emptyList();
-        }
+        return pipelines;
     }
 }

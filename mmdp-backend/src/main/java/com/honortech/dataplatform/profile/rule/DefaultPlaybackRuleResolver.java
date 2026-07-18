@@ -7,6 +7,7 @@ import com.honortech.dataplatform.profile.entity.CollectionProfileSource;
 import com.honortech.dataplatform.session.dto.SessionPlaybackResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -15,13 +16,15 @@ import java.util.Locale;
 import java.util.Map;
 
 @Component
+@Order(1)
 public class DefaultPlaybackRuleResolver implements PlaybackRuleResolver {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultPlaybackRuleResolver.class);
 
     @Override
     public boolean supports(String ruleCode) {
-        return "MULTI_VIDEO_IMU_V1".equalsIgnoreCase(ruleCode);
+        // 通用实现：按 sourceType 和产物文件推断可播放来源，适用于所有 Profile
+        return true;
     }
 
     @Override
