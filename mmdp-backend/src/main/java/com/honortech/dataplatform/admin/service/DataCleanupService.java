@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.honortech.dataplatform.admin.dto.CleanupResult;
 import com.honortech.dataplatform.asset.entity.DataAsset;
 import com.honortech.dataplatform.asset.mapper.DataAssetMapper;
+import com.honortech.dataplatform.common.enums.ProcessingJobStatus;
 import com.honortech.dataplatform.common.storage.StorageRouter;
 import com.honortech.dataplatform.file.entity.DataFile;
 import com.honortech.dataplatform.file.mapper.DataFileMapper;
@@ -100,7 +101,7 @@ public class DataCleanupService {
         log.info("已删除 {} 个 data_asset (jobId={})", assets.size(), jobId);
 
         // 4. 标记 Job 为已清理
-        job.setStatus("CLEANED");
+        job.setStatus(ProcessingJobStatus.CLEANED.name());
         processingJobMapper.updateById(job);
 
         result.setSummary(String.format("已清除处理任务 #%d 的产出：%d 个资产，%d 个文件，OSS 删除 %d 个",

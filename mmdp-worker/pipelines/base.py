@@ -33,6 +33,7 @@ class BasePipeline(ABC):
     # === 子类可选覆盖 ===
     description: str = ""          # 功能描述
     version: str = "1.0.0"         # 版本号
+    worker_type: str = "CPU"       # Worker 类型: CPU 或 GPU
     input_asset_types: List[str] = []   # 输入 AssetType 列表
     output_asset_types: List[str] = []  # 输出 AssetType 列表
     runtime_dependencies: List[str] = []  # 如 ["ffmpeg", "python>=3.10"]
@@ -84,4 +85,5 @@ class BasePipeline(ABC):
             "inputAssetTypes": cls.input_asset_types,
             "outputAssetTypes": cls.output_asset_types,
             "runtimeDependencies": cls.runtime_dependencies,
+            "workerType": cls.worker_type,
         }

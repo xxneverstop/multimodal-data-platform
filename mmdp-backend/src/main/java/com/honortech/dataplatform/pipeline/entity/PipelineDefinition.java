@@ -17,6 +17,7 @@ public class PipelineDefinition {
     private String inputAssetTypes;
     private String outputAssetTypes;
     private String executorType;
+    private String workerType;
     private Integer enabled;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -35,6 +36,8 @@ public class PipelineDefinition {
     public void setOutputAssetTypes(String outputAssetTypes) { this.outputAssetTypes = outputAssetTypes; }
     public String getExecutorType() { return executorType; }
     public void setExecutorType(String executorType) { this.executorType = executorType; }
+    public String getWorkerType() { return workerType; }
+    public void setWorkerType(String workerType) { this.workerType = workerType; }
     public Integer getEnabled() { return enabled; }
     public void setEnabled(Integer enabled) { this.enabled = enabled; }
     public LocalDateTime getCreatedAt() { return createdAt; }

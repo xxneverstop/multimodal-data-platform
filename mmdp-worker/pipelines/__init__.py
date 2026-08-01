@@ -48,10 +48,13 @@ def _discover_pipelines() -> Dict[str, BasePipeline]:
                 print(f"[pipeline] [WARN] {module_name}.{name} 未设置 pipeline_id，跳过")
                 continue
 
-            if pipeline_id in seen_ids:
+            # ── 规范化：strip + upper，与后端 PipelineIdNormalizer 保持一致 ──
+            normalized_id = pipeline_id.strip().upper()
+
+            if normalized_id in seen_ids:
                 print(
-                    f"[pipeline] [ERR] pipeline_id '{pipeline_id}' 冲突: "
-                    f"{seen_ids[pipeline_id]}.{name} vs 已注册的实例，跳过"
+                    f"[pipeline] [ERR] pipeline_id '{normalized_id}' 冲突（原始='{pipeline_id}'）: "
+                    f"{seen_ids[normalized_id]}.{name} vs 已注册的实例，跳过"
                 )
                 continue
 
@@ -61,10 +64,10 @@ def _discover_pipelines() -> Dict[str, BasePipeline]:
                 print(f"[pipeline] [WARN] 实例化 {module_name}.{name} 失败: {e}")
                 continue
 
-            discovered[pipeline_id] = instance
-            seen_ids[pipeline_id] = f"{module_name}.{name}"
+            discovered[normalized_id] = instance
+            seen_ids[normalized_id] = f"{module_name}.{name}"
             print(
-                f"[pipeline] [OK] 注册 {pipeline_id} "
+                f"[pipeline] [OK] 注册 {normalized_id} "
                 f"({obj.display_name or obj.__name__}) <- {module_name}.py"
             )
 
@@ -77,12 +80,18 @@ def get_manifest() -> List[Dict]:
     for pipeline_id, instance in PIPELINES.items():
         cls = type(instance)
         if hasattr(cls, "manifest"):
-            manifest.append(cls.manifest())
+            entry = cls.manifest()
         else:
-            manifest.append({
+            entry = {
                 "pipeline_id": pipeline_id,
                 "display_name": getattr(instance, "display_name", ""),
-            })
+            }
+        # 确保 pipelineId 是规范化形式（dict key 已是规范化值，这里防御性处理）
+        if "pipelineId" in entry:
+            entry["pipelineId"] = entry["pipelineId"].strip().upper()
+        elif "pipeline_id" in entry:
+            entry["pipeline_id"] = entry["pipeline_id"].strip().upper()
+        manifest.append(entry)
     return manifest
 
 

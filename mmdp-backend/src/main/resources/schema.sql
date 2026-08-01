@@ -322,6 +322,7 @@ CREATE TABLE IF NOT EXISTS pipeline_definition (
     input_asset_types JSON NULL COMMENT '所需输入资产类型列表',
     output_asset_types JSON NULL COMMENT '产出资产类型列表',
     executor_type VARCHAR(32) NOT NULL DEFAULT 'PYTHON_WORKER' COMMENT '执行方式',
+    worker_type VARCHAR(16) NOT NULL DEFAULT 'CPU' COMMENT 'Worker类型: CPU/GPU',
     enabled TINYINT NOT NULL DEFAULT 1 COMMENT '是否启用',
     created_at DATETIME NOT NULL COMMENT '创建时间',
     updated_at DATETIME NOT NULL COMMENT '更新时间',
