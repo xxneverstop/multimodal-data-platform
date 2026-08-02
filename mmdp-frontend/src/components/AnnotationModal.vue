@@ -90,7 +90,7 @@
 
 <script setup lang="ts">
 import { reactive, watch } from "vue";
-import type { FrameIssueItem } from "@/types/annotation";
+import type { FrameIssueItem, DefectType } from "@/types/annotation";
 import { SEVERITY_OPTIONS } from "@/types/annotation";
 
 const props = defineProps<{
@@ -167,7 +167,7 @@ function handleSave() {
     description: form.description.trim(),
     severity: form.severity as FrameIssueItem["severity"],
     category: form.defectType,
-    defectType: form.defectType || "other",
+    defectType: (form.defectType || "other") as DefectType,
   };
   emit("save", issue);
 }

@@ -35,8 +35,8 @@ POLL_INTERVAL = int(os.getenv("MMDP_WORKER_POLL_INTERVAL", "5"))
 # SMPL-H 模型文件目录（用于物理指标计算 V2）
 MMDP_SMPL_MODEL_DIR = os.getenv("MMDP_SMPL_MODEL_DIR", "/app/smpl_models")
 
-# Worker 类型：CPU 或 GPU，决定自动发现哪些 Pipeline 注册
-WORKER_TYPE = os.getenv("MMDP_WORKER_TYPE", "CPU").upper()
+# Worker 类型：CPU、GPU 或 ALL（本地开发用，注册所有 Pipeline）
+WORKER_TYPE = os.getenv("MMDP_WORKER_TYPE", "ALL").upper()
 
 # 物理指标计算设备（"cpu" 或 "cuda"）
 MMDP_PHYSICS_DEVICE = os.getenv("MMDP_PHYSICS_DEVICE", "cpu")

@@ -360,10 +360,12 @@ async function handleDeleteJobOutputs() {
     deleteJobDialogOpen.value = false;
     deleteJobTargetId.value = null;
     // 重新加载详情
-    const sessionId = Number(route.params.sessionId);
-    if (sessionId) {
-      detail.value = await fetchSessionDetail(String(sessionId));
-      await loadProcessingData(sessionId);
+    const sessionCode = String(route.params.sessionId);
+    if (sessionCode) {
+      detail.value = await fetchSessionDetail(sessionCode);
+      if (detail.value?.session?.id) {
+        await loadProcessingData(detail.value.session.id);
+      }
     }
   } catch (e) {
     deleteJobMessage.value = e instanceof Error ? e.message : "删除失败";
@@ -392,7 +394,7 @@ const allJobsTerminal = computed(() =>
 );
 
 /** 启动轮询：每 3 秒拉取 session jobs */
-function startPolling(sessionId: number) {
+function startPolling(sessionId: number, sessionCode: string) {
   stopPolling();
   pollingTimer.value = setInterval(async () => {
     try {
@@ -400,7 +402,7 @@ function startPolling(sessionId: number) {
       if (allJobsTerminal.value) {
         stopPolling();
         // 终态时刷新详情（产物列表）
-        detail.value = await fetchSessionDetail(String(sessionId));
+        detail.value = await fetchSessionDetail(sessionCode);
       }
     } catch {
       // 轮询失败静默处理
@@ -472,7 +474,7 @@ async function executePipeline(p: PipelineDefinitionResponse) {
     executeSuccess.value = true;
     console.debug("[executePipeline] 提交成功，启动轮询...");
     await loadProcessingData(detail.value!.session.id!);
-    startPolling(detail.value!.session.id!);
+    startPolling(detail.value!.session.id!, detail.value!.session.sessionId);
   } catch (e: any) {
     // ── 详细调试信息 ──
     const detail2 = {

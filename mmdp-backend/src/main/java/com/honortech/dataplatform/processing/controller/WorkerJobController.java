@@ -40,7 +40,7 @@ public class WorkerJobController {
     public ApiResponse<WorkerClaimResponse> claimJob(
             @RequestBody(required = false) WorkerClaimRequest request) {
         String workerType = (request != null && request.workerType() != null)
-                ? request.workerType().strip().toUpperCase() : "CPU";
+                ? request.workerType().strip().toUpperCase() : "ALL";
         WorkerClaimResponse response = processingJobService.claimJob(workerType);
         if (response == null) {
             return ApiResponse.success("No pending job for workerType=" + workerType, null);

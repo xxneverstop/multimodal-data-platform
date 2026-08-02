@@ -26,4 +26,6 @@ COPY smpl_models/ /app/smpl_models/
 # 确保工作目录存在
 RUN mkdir -p /tmp/mmdp-worker
 
+ENV MMDP_WORKER_TYPE=CPU
+
 ENTRYPOINT ["python", "main.py"]

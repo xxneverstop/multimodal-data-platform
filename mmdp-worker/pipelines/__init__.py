@@ -17,9 +17,13 @@ from .base import BasePipeline
 
 
 def _discover_pipelines() -> Dict[str, BasePipeline]:
-    """扫描 pipelines/ 目录，发现所有 BasePipeline 子类并实例化"""
+    """扫描 pipelines/ 目录，发现所有 BasePipeline 子类并实例化
+    按 MMDP_WORKER_TYPE 环境变量过滤，只加载匹配类型的 Pipeline
+    """
     discovered: Dict[str, BasePipeline] = {}
     seen_ids: Dict[str, str] = {}  # pipeline_id -> module_name，用于检测重复
+
+    worker_type_filter = os.getenv("MMDP_WORKER_TYPE", "ALL").upper()
 
     package_dir = os.path.dirname(__file__)
 
@@ -47,6 +51,11 @@ def _discover_pipelines() -> Dict[str, BasePipeline]:
             if not pipeline_id:
                 print(f"[pipeline] [WARN] {module_name}.{name} 未设置 pipeline_id，跳过")
                 continue
+
+            # ── 按 worker_type 过滤（ALL 模式不过滤，注册全部）──
+            pipeline_worker_type = getattr(obj, "worker_type", "CPU").upper()
+            if worker_type_filter != "ALL" and pipeline_worker_type != worker_type_filter:
+                continue  # 跳过不匹配类型的 Pipeline
 
             # ── 规范化：strip + upper，与后端 PipelineIdNormalizer 保持一致 ──
             normalized_id = pipeline_id.strip().upper()

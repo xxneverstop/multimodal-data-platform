@@ -1,0 +1,37 @@
+# MMDP GPU Worker — 部署在 GPU ECS (172.31.133.186)
+# 启动前：
+#   1. 确认 NVIDIA Container Toolkit 已安装：nvidia-ctk --version
+#   2. 确认 CUDA 13 容器可运行：docker run --rm --gpus all nvidia/cuda:13.0.0-base-ubuntu22.04 nvidia-smi
+#   3. cp .env.gpu .env && 填写 OSS 凭证
+# 启动：docker compose -f docker-compose.gpu.yml up -d
+# 查看日志：docker logs -f mmdp-worker-gpu
+
+services:
+  mmdp-worker-gpu:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile.gpu
+    image: mmdp-worker-gpu:latest
+    container_name: mmdp-worker-gpu
+    restart: unless-stopped
+    environment:
+      # Backend — CPU ECS 内网 IP，走 Nginx 80 端口
+      MMDP_BACKEND_URL: ${MMDP_BACKEND_URL:-http://172.31.133.185}
+      # OSS 配置（与 CPU ECS 共享）
+      MMDP_OSS_ENDPOINT: ${MMDP_OSS_ENDPOINT}
+      MMDP_OSS_ACCESS_KEY_ID: ${MMDP_OSS_ACCESS_KEY_ID}
+      MMDP_OSS_ACCESS_KEY_SECRET: ${MMDP_OSS_ACCESS_KEY_SECRET}
+      MMDP_OSS_BUCKET: ${MMDP_OSS_BUCKET:-mmdp-test}
+      # Worker 配置
+      MMDP_WORKER_TYPE: "GPU"
+      MMDP_PHYSICS_DEVICE: "cuda"
+      MMDP_SMPL_MODEL_DIR: "/app/smpl_models"
+      MMDP_WORKER_WORK_DIR: "/tmp/mmdp-worker"
+      MMDP_WORKER_POLL_INTERVAL: "5"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

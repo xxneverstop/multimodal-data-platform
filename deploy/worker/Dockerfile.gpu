@@ -1,0 +1,50 @@
+FROM nvidia/cuda:13.0.0-runtime-ubuntu22.04
+
+# 系统依赖：Python 3.10、ffmpeg、ZED SDK 运行时依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 python3-pip \
+    wget ffmpeg \
+    libx11-6 libglib2.0-0 libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# --- ZED SDK 5.4 for Ubuntu 22 + CUDA 13 ---
+# 下载预编译 .run 安装包，静默安装
+# 注意：下载 URL 可能随版本更新变化，部署前到 https://www.stereolabs.com/developers/release/ 确认
+RUN wget -q -O /tmp/ZED_SDK.run \
+    https://download.stereolabs.com/zedsdk/5.4/cu13/ubuntu22.04/ZED_SDK_Ubuntu22_cuda13.0_v5.4.0.zstd.run \
+    && chmod +x /tmp/ZED_SDK.run \
+    && /tmp/ZED_SDK.run -- silent skip_cuda=true \
+    && rm /tmp/ZED_SDK.run
+
+# 安装 pyzed（ZED SDK Python 绑定）
+RUN pip3 install --no-cache-dir --break-system-packages \
+    --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+    /usr/local/zed/pyzed/
+
+# --- PyTorch（CUDA 版）---
+RUN pip3 install --no-cache-dir --break-system-packages \
+    --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+    torch torchvision torchaudio
+
+# --- 其他 Python 依赖 ---
+COPY src/requirements.txt /app/requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages \
+    --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+    -r requirements.txt
+
+# --- Worker 源码 ---
+COPY src/ /app/
+
+# --- SMPL-H 人体模型（用于 MOTION_PHYSICS_METRICS_V2）---
+COPY smpl_models/ /app/smpl_models/
+
+# 确保工作目录存在
+RUN mkdir -p /tmp/mmdp-worker
+
+ENV MMDP_WORKER_TYPE=GPU
+ENV MMDP_PHYSICS_DEVICE=cuda
+ENV MMDP_SMPL_MODEL_DIR=/app/smpl_models
+
+ENTRYPOINT ["python3", "main.py"]

@@ -13,7 +13,7 @@ import oss2
 
 from config import (
     BACKEND_URL, OSS_ENDPOINT, OSS_ACCESS_KEY_ID, OSS_ACCESS_KEY_SECRET,
-    OSS_BUCKET, WORK_DIR, POLL_INTERVAL, OUTPUT_PREFIX, validate
+    OSS_BUCKET, WORK_DIR, POLL_INTERVAL, OUTPUT_PREFIX, WORKER_TYPE, validate
 )
 from pipelines import PIPELINES, get_manifest
 
@@ -116,6 +116,7 @@ def claim_job() -> dict | None:
     def _do():
         resp = requests.post(
             f"{BACKEND_URL}/api/worker/jobs/claim",
+            json={"workerType": WORKER_TYPE},
             timeout=10
         )
         data = resp.json()
@@ -349,6 +350,7 @@ def main():
 
     print("=" * 50)
     print("mmdp-worker 启动")
+    print(f"  Worker 类型: {WORKER_TYPE}")
     print(f"  后端: {BACKEND_URL}")
     print(f"  OSS: {OSS_ENDPOINT} / {OSS_BUCKET}")
     print(f"  工作目录: {WORK_DIR}")

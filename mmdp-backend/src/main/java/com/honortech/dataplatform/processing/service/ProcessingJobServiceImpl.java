@@ -423,17 +423,22 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
         if (!candidates.isEmpty()) {
             log.info("[Worker] claimJob(workerType={}) — 当前CREATED+PYTHON_WORKER作业数: {}", wt, candidates.size());
         }
-        // 遍历找到第一个属于该 workerType 的 Pipeline Job
+        // 遍历找到第一个属于该 workerType 的 Pipeline Job（ALL 模式不过滤）
         ProcessingJob job = null;
-        for (ProcessingJob candidate : candidates) {
-            PipelineDefinition def = pipelineDefMapper.selectOne(
-                    new LambdaQueryWrapper<PipelineDefinition>()
-                            .eq(PipelineDefinition::getPipelineId, candidate.getPipelineId()));
-            String jobWorkerType = (def != null && def.getWorkerType() != null)
-                    ? def.getWorkerType().strip().toUpperCase() : "CPU";
-            if (wt.equals(jobWorkerType)) {
-                job = candidate;
-                break;
+        if ("ALL".equals(wt)) {
+            // 本地开发模式：领取任意 CREATED Job，不限制 Pipeline 类型
+            job = candidates.isEmpty() ? null : candidates.get(0);
+        } else {
+            for (ProcessingJob candidate : candidates) {
+                PipelineDefinition def = pipelineDefMapper.selectOne(
+                        new LambdaQueryWrapper<PipelineDefinition>()
+                                .eq(PipelineDefinition::getPipelineId, candidate.getPipelineId()));
+                String jobWorkerType = (def != null && def.getWorkerType() != null)
+                        ? def.getWorkerType().strip().toUpperCase() : "CPU";
+                if (wt.equals(jobWorkerType)) {
+                    job = candidate;
+                    break;
+                }
             }
         }
         if (job == null) {
