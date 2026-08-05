@@ -191,6 +191,10 @@ public class SessionImportServiceImpl implements SessionImportService {
     @Override
     public InitiateImportUploadResponse initiateImportUpload(Long taskId, InitiateImportUploadRequest request) {
         acquisitionTaskService.getTask(taskId);
+        SessionImportRecord existing = findImportRecordByTaskIdAndRequestId(taskId, request.importKey());
+        if (existing != null && SessionImportStatus.IMPORTED.name().equals(existing.getStatus())) {
+            throw new BizException("This importKey has already been imported");
+        }
         String normalizedRelativePath = normalizeEntryPath(request.relativePath());
         if (!firstNonBlank(request.fileName(), "").equals(fileName(normalizedRelativePath))) {
             throw new BizException("fileName does not match relativePath filename");

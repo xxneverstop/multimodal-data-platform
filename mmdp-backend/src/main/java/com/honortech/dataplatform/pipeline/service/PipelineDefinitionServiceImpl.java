@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.honortech.dataplatform.asset.entity.DataAsset;
 import com.honortech.dataplatform.asset.service.DataAssetService;
 import com.honortech.dataplatform.common.enums.AssetType;
+import com.honortech.dataplatform.common.enums.ProcessingJobStatus;
 import com.honortech.dataplatform.common.exception.BizException;
 import com.honortech.dataplatform.pipeline.dto.CreatePipelineRequest;
 import com.honortech.dataplatform.pipeline.dto.PipelineDefinitionResponse;
@@ -14,6 +15,9 @@ import com.honortech.dataplatform.pipeline.entity.PipelineDefinition;
 import com.honortech.dataplatform.pipeline.entity.ProfilePipeline;
 import com.honortech.dataplatform.pipeline.mapper.PipelineDefinitionMapper;
 import com.honortech.dataplatform.pipeline.mapper.ProfilePipelineMapper;
+import com.honortech.dataplatform.processing.entity.ProcessingJob;
+import com.honortech.dataplatform.processing.mapper.ProcessingJobMapper;
+import com.honortech.dataplatform.processing.util.PipelineIdNormalizer;
 import com.honortech.dataplatform.session.entity.CollectionSession;
 import com.honortech.dataplatform.session.mapper.CollectionSessionMapper;
 import org.slf4j.Logger;
@@ -24,7 +28,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class PipelineDefinitionServiceImpl implements PipelineDefinitionService {
@@ -37,6 +45,7 @@ public class PipelineDefinitionServiceImpl implements PipelineDefinitionService 
     private final ProfilePipelineMapper profilePipelineMapper;
     private final CollectionSessionMapper sessionMapper;
     private final DataAssetService dataAssetService;
+    private final ProcessingJobMapper processingJobMapper;
     private final ObjectMapper objectMapper;
     private final com.honortech.dataplatform.processing.service.WorkerPipelineRegistry workerPipelineRegistry;
 
@@ -45,12 +54,14 @@ public class PipelineDefinitionServiceImpl implements PipelineDefinitionService 
             ProfilePipelineMapper profilePipelineMapper,
             CollectionSessionMapper sessionMapper,
             DataAssetService dataAssetService,
+            ProcessingJobMapper processingJobMapper,
             ObjectMapper objectMapper,
             com.honortech.dataplatform.processing.service.WorkerPipelineRegistry workerPipelineRegistry) {
         this.pipelineMapper = pipelineMapper;
         this.profilePipelineMapper = profilePipelineMapper;
         this.sessionMapper = sessionMapper;
         this.dataAssetService = dataAssetService;
+        this.processingJobMapper = processingJobMapper;
         this.objectMapper = objectMapper;
         this.workerPipelineRegistry = workerPipelineRegistry;
     }
@@ -138,6 +149,13 @@ public class PipelineDefinitionServiceImpl implements PipelineDefinitionService 
         pipelineMapper.updateById(pipeline);
     }
 
+    /** 不可重复提交的 job 状态 */
+    private static final Set<String> ACTIVE_JOB_STATUSES = Set.of(
+            ProcessingJobStatus.CREATED.name(),
+            ProcessingJobStatus.CLAIMED.name(),
+            ProcessingJobStatus.RUNNING.name(),
+            ProcessingJobStatus.SUCCESS.name());
+
     @Override
     public List<PipelineDefinitionResponse> getAvailablePipelines(Long sessionId) {
         CollectionSession session = sessionMapper.selectById(sessionId);
@@ -145,7 +163,7 @@ public class PipelineDefinitionServiceImpl implements PipelineDefinitionService 
             return Collections.emptyList();
         }
 
-        // 获取该 Profile 关联的所有 Pipeline
+        // 1. 获取该 Profile 关联的所有 Pipeline
         List<ProfilePipeline> links = profilePipelineMapper.selectList(
                 new LambdaQueryWrapper<ProfilePipeline>()
                         .eq(ProfilePipeline::getProfileId, session.getProfileId())
@@ -160,7 +178,7 @@ public class PipelineDefinitionServiceImpl implements PipelineDefinitionService 
                         .in(PipelineDefinition::getPipelineId, pipelineIds)
                         .eq(PipelineDefinition::getEnabled, 1));
 
-        // 获取 session 已有资产类型
+        // 2. 获取 session 现有资产类型（用于输入文件校验）
         List<DataAsset> assets = dataAssetService.listByTaskId(session.getTaskId());
         List<String> existingAssetTypes = assets.stream()
                 .map(DataAsset::getAssetType)
@@ -168,22 +186,71 @@ public class PipelineDefinitionServiceImpl implements PipelineDefinitionService 
                 .distinct()
                 .toList();
 
-        // 过滤：仅保留 Worker 已注册的 Pipeline，再按输入资产匹配
-        List<PipelineDefinition> workerReady = pipelines.stream()
-                .filter(p -> workerPipelineRegistry.isRegistered(p.getPipelineId()))
-                .toList();
+        // 3. 获取该 session 下所有 job，按 pipelineId 分组取最新
+        List<ProcessingJob> sessionJobs = processingJobMapper.selectList(
+                new LambdaQueryWrapper<ProcessingJob>()
+                        .eq(ProcessingJob::getSessionId, sessionId));
+        Map<String, ProcessingJob> latestJobByPipeline = sessionJobs.stream()
+                .collect(Collectors.groupingBy(
+                        ProcessingJob::getPipelineId,
+                        Collectors.collectingAndThen(
+                                Collectors.maxBy(Comparator.comparing(ProcessingJob::getCreatedAt)),
+                                opt -> opt.orElse(null))));
 
-        if (workerReady.isEmpty() && !pipelines.isEmpty()) {
-            log.warn("[可用Pipeline] Session {} 有 {} 个DB Pipeline，但无一被Worker注册. Worker已注册({}): {}",
-                    sessionId, pipelines.size(),
-                    workerPipelineRegistry.getRegisteredIds().size(),
-                    workerPipelineRegistry.getRegisteredIds());
+        // 4. 遍历每个 pipeline，计算可用性
+        List<PipelineDefinitionResponse> result = new ArrayList<>();
+        for (PipelineDefinition pipeline : pipelines) {
+            String pid = pipeline.getPipelineId();
+            ProcessingJob latestJob = latestJobByPipeline.get(pid);
+            String latestJobStatus = latestJob != null ? latestJob.getStatus() : null;
+
+            boolean ready = true;
+            String blockedReason = null;
+
+            // 检查 1: Worker 注册
+            if (!workerPipelineRegistry.isRegistered(PipelineIdNormalizer.normalize(pid))) {
+                ready = false;
+                blockedReason = "Pipeline 未在 Worker 端注册，请确认 Worker 已启动并包含该 Pipeline";
+            }
+            // 检查 2: 输入文件（OR 逻辑：至少一种匹配）
+            else if (!hasRequiredInputs(pipeline, existingAssetTypes)) {
+                ready = false;
+                List<String> required = parseStringList(pipeline.getInputAssetTypes());
+                if (required == null || required.isEmpty()) {
+                    blockedReason = "该 Pipeline 未声明输入资产类型，无法判断输入文件是否齐全";
+                } else {
+                    blockedReason = "缺少输入文件，需要以下类型之一: " + String.join(", ", required);
+                }
+            }
+            // 检查 3: 是否存在活跃 job 阻止重新提交
+            else if (latestJob != null && ACTIVE_JOB_STATUSES.contains(latestJobStatus)) {
+                ready = false;
+                if (ProcessingJobStatus.SUCCESS.name().equals(latestJobStatus)) {
+                    blockedReason = "已成功完成处理 (Job #" + latestJob.getId()
+                            + ")，请先清除产物后可重新提交";
+                } else {
+                    blockedReason = "处理任务进行中 (Job #" + latestJob.getId()
+                            + ", 状态: " + latestJobStatus + ")，请等待完成";
+                }
+            }
+
+            result.add(new PipelineDefinitionResponse(
+                    pipeline.getId(),
+                    pipeline.getPipelineId(),
+                    pipeline.getDisplayName(),
+                    pipeline.getDescription(),
+                    parseStringList(pipeline.getInputAssetTypes()),
+                    parseStringList(pipeline.getOutputAssetTypes()),
+                    pipeline.getExecutorType(),
+                    pipeline.getEnabled(),
+                    Collections.emptyList(), // session 级查询不需要 profileIds
+                    pipeline.getCreatedAt(),
+                    pipeline.getUpdatedAt(),
+                    latestJobStatus,
+                    ready,
+                    blockedReason));
         }
-
-        return workerReady.stream()
-                .filter(p -> hasRequiredInputs(p, existingAssetTypes))
-                .map(this::toResponse)
-                .toList();
+        return result;
     }
 
     /**
@@ -243,7 +310,10 @@ public class PipelineDefinitionServiceImpl implements PipelineDefinitionService 
                 pipeline.getEnabled(),
                 profileIds,
                 pipeline.getCreatedAt(),
-                pipeline.getUpdatedAt()
+                pipeline.getUpdatedAt(),
+                null,   // latestJobStatus: 全局查询无 session 上下文
+                false,  // isReady: 全局查询不可用
+                null    // blockedReason: 全局查询不可用
         );
     }
 

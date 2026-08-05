@@ -16,6 +16,12 @@ export interface PipelineDefinitionResponse {
   profileIds: number[];
   createdAt: string;
   updatedAt: string;
+  /** 该 session 下最近一个 job 的状态，无 job 则为 null */
+  latestJobStatus?: string | null;
+  /** 当前是否可以提交处理任务 */
+  isReady?: boolean;
+  /** 不可提交时的阻塞原因 */
+  blockedReason?: string | null;
 }
 
 export interface CreatePipelineRequest {

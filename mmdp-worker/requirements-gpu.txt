@@ -4,4 +4,3 @@ numpy>=1.24
 h5py>=3.10
 scipy>=1.12
 opencv-python>=4.9
-lerobot==0.4.4

@@ -1,0 +1,56 @@
+FROM nvidia/cuda:13.0.0-runtime-ubuntu22.04
+
+# GPU Worker 运行库 + pyzed 编译工具链
+RUN sed -i 's|archive.ubuntu.com|mirrors.aliyun.com|g; s|security.ubuntu.com|mirrors.aliyun.com|g' /etc/apt/sources.list && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 python3-pip \
+    ffmpeg zstd build-essential python3-dev \
+    libx11-6 libglib2.0-0 libgomp1 libgl1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Ubuntu 22.04 自带 pip 较旧，先升级后再安装 pyzed 和 PyTorch
+RUN python3 -m pip install --no-cache-dir \
+    --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+    --upgrade pip setuptools wheel
+
+# --- ZED SDK 5.4 ---
+COPY ZED_SDK_Ubuntu22_cuda13.0_tensorrt10.13_v5.4.1.zstd.run /tmp/ZED_SDK.run
+RUN chmod +x /tmp/ZED_SDK.run \
+    && /tmp/ZED_SDK.run -- silent skip_cuda=true \
+    && rm /tmp/ZED_SDK.run
+
+# pyzed（ZED SDK Python 绑定）
+RUN python3 -m pip install --no-cache-dir --default-timeout 600 \
+    --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+    /usr/local/zed/pyzed/
+
+# 固定与 CUDA 13.0 对应的 PyTorch，避免镜像源解析成 CPU 版
+RUN python3 -m pip install --no-cache-dir --default-timeout 600 \
+    torch==2.10.0 \
+    --index-url https://download.pytorch.org/whl/cu130
+
+# GPU Pipeline 不依赖 lerobot，避免无意义地编译 evdev
+COPY src/requirements-gpu.txt /app/requirements.txt
+RUN python3 -m pip install --no-cache-dir --default-timeout 600 \
+    --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+    -r requirements.txt && \
+    python3 -c "import cv2, importlib.util as u, torch; assert u.find_spec('pyzed'); assert torch.version.cuda and torch.version.cuda.startswith('13.')"
+
+# 编译完成后删除工具链
+RUN apt-get remove -y build-essential python3-dev && \
+    apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
+
+# Worker 源码（经常改动，放最后利用缓存）
+COPY src/ /app/
+COPY smpl_models/ /app/smpl_models/
+
+RUN mkdir -p /tmp/mmdp-worker
+
+ENV MMDP_WORKER_TYPE=GPU
+ENV MMDP_PHYSICS_DEVICE=cuda
+ENV MMDP_SMPL_MODEL_DIR=/app/smpl_models
+
+ENTRYPOINT ["python3", "main.py"]

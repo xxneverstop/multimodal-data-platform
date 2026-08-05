@@ -108,6 +108,7 @@ class MotionPhysicsMetricsV2Pipeline(BasePipeline):
 
     pipeline_id = "MOTION_PHYSICS_METRICS_V2"
     display_name = "动作物理指标计算V2"
+    worker_type = "GPU"
     description = "基于SMPL BodyModel前向计算的完整物理质量指标：穿透/浮空/滑动/关节跳变/手腕扭曲/抖动，需要torch和SMPL-H模型文件"
     version = "2.0.0"
     input_asset_types = ["SMPL_NPZ"]

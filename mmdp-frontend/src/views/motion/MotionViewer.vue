@@ -122,11 +122,11 @@
                   <div v-for="field in MOTIONDB_DEFECT_FIELDS" :key="field.key" class="mv-defect-row">
                     <span class="mv-defect-label">{{ field.label }}</span>
                     <span v-if="field.type === 'yn'" class="mv-defect-yn">
-                      <button class="mv-yn-btn" :class="{ active: annotLocal.motiondbDefects[field.key] === 'Y' }" @click="annotLocal.motiondbDefects[field.key] = 'Y'">是</button>
-                      <button class="mv-yn-btn" :class="{ active: annotLocal.motiondbDefects[field.key] === 'N' }" @click="annotLocal.motiondbDefects[field.key] = 'N'">否</button>
+                      <button class="mv-yn-btn" :class="{ active: annotLocal.motiondbDefects[field.key] === 'Y' }" @click="setDefect(field.key, 'Y')">是</button>
+                      <button class="mv-yn-btn" :class="{ active: annotLocal.motiondbDefects[field.key] === 'N' }" @click="setDefect(field.key, 'N')">否</button>
                     </span>
                     <span v-else-if="field.type === 'three'" class="mv-defect-three">
-                      <button v-for="lv in ['0','1','2']" :key="lv" class="mv-yn-btn" :class="{ active: annotLocal.motiondbDefects[field.key] === lv }" @click="annotLocal.motiondbDefects[field.key] = lv">{{ lv === '0' ? '无' : lv === '1' ? '轻微' : '明显' }}</button>
+                      <button v-for="lv in ['0','1','2']" :key="lv" class="mv-yn-btn" :class="{ active: annotLocal.motiondbDefects[field.key] === lv }" @click="setDefect(field.key, lv)">{{ lv === '0' ? '无' : lv === '1' ? '轻微' : '明显' }}</button>
                     </span>
                     <span v-else class="mv-defect-speed">
                       <select v-model="annotLocal.motiondbDefects[field.key]" class="mv-sel-sm">
@@ -290,18 +290,12 @@ const defectLabels: Record<string, string> = {
 };
 function defectLabel(type: string) { return defectLabels[type] || type; }
 
-const annotLocal = reactive<{
-  qualityRating: string | null;
-  motiondbDefects: MotiondbDefects;
-  motionTags: string[];
-  frameIssues: FrameIssueItem[];
-  textDescriptions: string[];
-}>({
-  qualityRating: null,
-  motiondbDefects: { ...DEFAULT_MOTIONDB_DEFECTS },
-  motionTags: [],
-  frameIssues: [],
-  textDescriptions: [],
+const annotLocal = reactive({
+  qualityRating: null as string | null,
+  motiondbDefects: { ...DEFAULT_MOTIONDB_DEFECTS } as MotiondbDefects,
+  motionTags: [] as string[],
+  frameIssues: [] as FrameIssueItem[],
+  textDescriptions: [] as string[],
 });
 
 watch(() => currentAnnotation.value, (ann) => {
@@ -321,6 +315,11 @@ const annotationProgressText = computed(() => {
 });
 
 function severityColor(s: string) { return SEVERITY_OPTIONS.find(o => o.value === s)?.color ?? "#f59e0b"; }
+// 辅助：模板中索引 MotiondbDefects 时 TS 无法收窄联合类型，提供类型安全的 setter
+function setDefect(key: keyof MotiondbDefects, value: string) {
+  (annotLocal.motiondbDefects as Record<string, string>)[key] = value;
+}
+
 function toggleTag(tag: string) {
   const idx = annotLocal.motionTags.indexOf(tag);
   idx >= 0 ? annotLocal.motionTags.splice(idx, 1) : annotLocal.motionTags.push(tag);

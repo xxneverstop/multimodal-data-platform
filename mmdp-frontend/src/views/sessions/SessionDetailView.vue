@@ -134,18 +134,28 @@
         <section class="light2-panel">
           <div class="light2-panel-hdr">
             <span class="light2-panel-title">可用处理</span>
-            <span class="light2-panel-sub">{{ availablePipelines.length }} 个可用规则</span>
+            <span class="light2-panel-sub">{{ availablePipelines.length }} 个处理规则</span>
           </div>
           <div v-if="!availablePipelines.length" class="light2-empty-state">该 Profile 下暂无可用处理规则，请先在「处理」页面创建规则并关联 Profile。</div>
           <div v-else class="light2-job-list">
             <article v-for="p in availablePipelines" :key="p.pipelineId" class="light2-job-row">
               <div class="light2-job-code">{{ p.pipelineId }}</div>
-              <div class="light2-job-name">{{ p.displayName }}</div>
+              <div class="light2-job-name">
+                {{ p.displayName }}
+                <span v-if="p.latestJobStatus" class="light2-badge" :class="jobStatusBadgeClass(p.latestJobStatus)" style="margin-left:8px;font-size:11px">{{ jobStatusLabel(p.latestJobStatus) }}</span>
+              </div>
               <div class="light2-job-time" style="color:var(--color-text-tertiary);font-size:12px">{{ p.executorType }}</div>
-              <div class="light2-job-duration"></div>
+              <div class="light2-job-duration" style="font-size:12px">
+                <span v-if="!p.isReady && p.blockedReason" :style="{color: blockedReasonColor(p)}">{{ p.blockedReason }}</span>
+              </div>
               <div class="light2-job-status">
-                <button class="light2-btn light2-btn-primary light2-btn-sm" @click="executePipeline(p)" :disabled="executingPipelineId === p.pipelineId">
-                  {{ executingPipelineId === p.pipelineId ? '提交中...' : '提交处理任务' }}
+                <button
+                  class="light2-btn light2-btn-sm"
+                  :class="pipelineButtonClass(p)"
+                  @click="executePipeline(p)"
+                  :disabled="!p.isReady || executingPipelineId === p.pipelineId"
+                >
+                  {{ pipelineButtonText(p) }}
                 </button>
               </div>
             </article>
@@ -300,7 +310,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { fetchSessionDetail } from "@/api/platform";
 import { fetchAvailablePipelines } from "@/api/pipelines";
@@ -350,10 +360,12 @@ async function handleDeleteJobOutputs() {
     deleteJobDialogOpen.value = false;
     deleteJobTargetId.value = null;
     // 重新加载详情
-    const sessionId = Number(route.params.sessionId);
-    if (sessionId) {
-      detail.value = await fetchSessionDetail(String(sessionId));
-      await loadProcessingData(sessionId);
+    const sessionCode = String(route.params.sessionId);
+    if (sessionCode) {
+      detail.value = await fetchSessionDetail(sessionCode);
+      if (detail.value?.session?.id) {
+        await loadProcessingData(detail.value.session.id);
+      }
     }
   } catch (e) {
     deleteJobMessage.value = e instanceof Error ? e.message : "删除失败";
@@ -371,6 +383,40 @@ const executingPipelineId = ref<string | null>(null);
 const playbackReady = ref(false);            // Session 级别：原始+全部产物是否满足播放规则
 const executeError = ref("");
 const executeSuccess = ref(false);
+
+// ── 自动轮询 ──
+const pollingTimer = ref<ReturnType<typeof setInterval> | null>(null);
+
+/** 所有 job 是否都已到达终态 */
+const allJobsTerminal = computed(() =>
+  sessionJobs.value.length > 0 &&
+  sessionJobs.value.every(j => ["SUCCESS", "FAILED", "CLEANED"].includes(j.status))
+);
+
+/** 启动轮询：每 3 秒拉取 session jobs */
+function startPolling(sessionId: number, sessionCode: string) {
+  stopPolling();
+  pollingTimer.value = setInterval(async () => {
+    try {
+      sessionJobs.value = await fetchSessionJobs(sessionId);
+      if (allJobsTerminal.value) {
+        stopPolling();
+        // 终态时刷新详情（产物列表）
+        detail.value = await fetchSessionDetail(sessionCode);
+      }
+    } catch {
+      // 轮询失败静默处理
+    }
+  }, 3000);
+}
+
+/** 停止轮询并清理定时器 */
+function stopPolling() {
+  if (pollingTimer.value !== null) {
+    clearInterval(pollingTimer.value);
+    pollingTimer.value = null;
+  }
+}
 
 // ── DataFile 展开列表 ──
 const sessionFiles = ref<DataFileResponse[]>([]);
@@ -426,8 +472,9 @@ async function executePipeline(p: PipelineDefinitionResponse) {
     });
     await createSessionJob(detail.value!.session.id!, { pipelineId: p.pipelineId });
     executeSuccess.value = true;
-    console.debug("[executePipeline] 提交成功，刷新作业列表...");
+    console.debug("[executePipeline] 提交成功，启动轮询...");
     await loadProcessingData(detail.value!.session.id!);
+    startPolling(detail.value!.session.id!, detail.value!.session.sessionId);
   } catch (e: any) {
     // ── 详细调试信息 ──
     const detail2 = {
@@ -447,6 +494,61 @@ async function executePipeline(p: PipelineDefinitionResponse) {
   } finally {
     executingPipelineId.value = null;
   }
+}
+
+// ── Pipeline 按钮状态辅助函数 ──
+
+/** 上次 job 状态的中文标签 */
+function jobStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    CREATED: "已提交",
+    CLAIMED: "已领取",
+    RUNNING: "处理中",
+    SUCCESS: "已完成",
+    FAILED: "失败",
+    CLEANED: "已清除",
+  };
+  return map[status] ?? status;
+}
+
+/** 上次 job 状态的 Badge CSS class */
+function jobStatusBadgeClass(status: string): string {
+  const map: Record<string, string> = {
+    CREATED: "light2-badge-info",
+    CLAIMED: "light2-badge-info",
+    RUNNING: "light2-badge-warn",
+    SUCCESS: "light2-badge-ok",
+    FAILED: "light2-badge-err",
+    CLEANED: "light2-badge-neutral",
+  };
+  return map[status] ?? "light2-badge-neutral";
+}
+
+/** 阻塞原因文字颜色 */
+function blockedReasonColor(p: PipelineDefinitionResponse): string {
+  if (p.isReady) return "var(--color-text-tertiary)";
+  if (p.latestJobStatus === "SUCCESS") return "var(--color-success, #0d9444)";
+  if (p.latestJobStatus && ["CREATED", "CLAIMED", "RUNNING"].includes(p.latestJobStatus)) return "var(--color-warning, #d97706)";
+  return "var(--color-danger, #d92d20)";
+}
+
+/** Pipeline 按钮 CSS class */
+function pipelineButtonClass(p: PipelineDefinitionResponse): string {
+  if (!p.isReady) return "light2-btn-sec";
+  return "light2-btn-primary";
+}
+
+/** Pipeline 按钮文案 */
+function pipelineButtonText(p: PipelineDefinitionResponse): string {
+  if (executingPipelineId.value === p.pipelineId) return "提交中...";
+  if (p.isReady) return "提交处理任务";
+  // isReady === false 的各种原因
+  if (p.latestJobStatus === "SUCCESS") return "需先清除产物";
+  if (p.latestJobStatus === "RUNNING" || p.latestJobStatus === "CLAIMED") return "处理中...";
+  if (p.latestJobStatus === "CREATED") return "等待 Worker 领取...";
+  if (p.blockedReason?.includes("输入文件")) return "缺少输入";
+  if (p.blockedReason?.includes("未注册")) return "Worker 未就绪";
+  return "不可提交";
 }
 
 const FAILURE_STATUSES = new Set(["FAILED", "ERROR", "QC_FAILED", "WARNING", "QC_WARNING"]);
@@ -821,5 +923,9 @@ watch(
 
 onMounted(() => {
   void loadDetail();
+});
+
+onUnmounted(() => {
+  stopPolling();
 });
 </script>

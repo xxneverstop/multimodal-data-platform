@@ -6,5 +6,7 @@ public enum ProcessingJobStatus {
     RUNNING,
     REGISTERED,
     SUCCESS,
-    FAILED
+    FAILED,
+    /** 产物已被管理员清除，允许重新提交 */
+    CLEANED
 }

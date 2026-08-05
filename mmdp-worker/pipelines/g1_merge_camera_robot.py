@@ -96,6 +96,7 @@ class G1MergeCameraRobotPipeline(BasePipeline):
 
     pipeline_id = "G1_MERGE_CAMERA_ROBOT"
     display_name = "G1相机-机器人数据合并"
+    worker_type = "GPU"
     description = "将ZED双目相机SVO2数据与机器人HDF5遥操作数据合并：时间戳对齐、图像JPEG压缩、计算delta EEF/delta Height"
     version = "1.0.0"
     input_asset_types = ["G1_ROBOT_HDF5", "G1_CAMERA_SVO2"]

@@ -13,5 +13,6 @@ public record WorkerPipelineInfo(
         String version,
         List<String> inputAssetTypes,
         List<String> outputAssetTypes,
-        List<String> runtimeDependencies
+        List<String> runtimeDependencies,
+        String workerType
 ) {}

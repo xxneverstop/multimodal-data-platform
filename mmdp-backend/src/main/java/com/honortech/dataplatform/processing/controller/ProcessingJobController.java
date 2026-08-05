@@ -11,6 +11,7 @@ import com.honortech.dataplatform.processing.dto.ExecutionGraphResponse;
 import com.honortech.dataplatform.processing.service.ExecutionGraphService;
 import com.honortech.dataplatform.processing.service.ProcessingJobService;
 import com.honortech.dataplatform.processing.service.TaskLineageService;
+import com.honortech.dataplatform.processing.util.PipelineIdNormalizer;
 import jakarta.validation.Valid;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -42,14 +43,30 @@ public class ProcessingJobController {
     public ApiResponse<ProcessingJobResponse> createJob(
             @PathVariable Long taskId,
             @Valid @RequestBody CreateProcessingJobRequest request) {
-        return ApiResponse.success("Processing job created", processingJobService.createJob(taskId, request));
+        String normalized = PipelineIdNormalizer.normalize(request.pipelineId());
+        CreateProcessingJobRequest normalizedRequest = new CreateProcessingJobRequest(
+                normalized, request.parameters());
+        return ApiResponse.success("Processing job created",
+                processingJobService.createJob(taskId, normalizedRequest));
     }
 
     @PostMapping("/api/tasks/{taskId}/processing-jobs/manual")
     public ApiResponse<ManualProcessingJobResponse> createManualJob(
             @PathVariable Long taskId,
             @Valid @RequestBody CreateManualProcessingJobRequest request) {
-        return ApiResponse.success("Manual processing job registered", processingJobService.createManualJob(taskId, request));
+        String normalized = PipelineIdNormalizer.normalize(request.pipelineId());
+        CreateManualProcessingJobRequest normalizedRequest = new CreateManualProcessingJobRequest(
+                normalized,
+                request.inputAssetIds(),
+                request.outputAssets(),
+                request.operatorName(),
+                request.toolName(),
+                request.toolVersion(),
+                request.paramsJson(),
+                request.logPath(),
+                request.remark());
+        return ApiResponse.success("Manual processing job registered",
+                processingJobService.createManualJob(taskId, normalizedRequest));
     }
 
     @GetMapping("/api/tasks/{taskId}/processing-jobs")
@@ -76,8 +93,11 @@ public class ProcessingJobController {
     public ApiResponse<ProcessingJobResponse> createSessionJob(
             @PathVariable Long sessionId,
             @Valid @RequestBody CreateSessionJobRequest request) {
+        String normalized = PipelineIdNormalizer.normalize(request.pipelineId());
+        CreateSessionJobRequest normalizedRequest = new CreateSessionJobRequest(
+                normalized, request.parameters());
         return ApiResponse.success("Processing job created",
-                processingJobService.createSessionJob(sessionId, request));
+                processingJobService.createSessionJob(sessionId, normalizedRequest));
     }
 
     @GetMapping("/api/sessions/{sessionId}/processing-jobs")

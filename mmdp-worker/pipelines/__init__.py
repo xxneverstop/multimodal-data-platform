@@ -17,9 +17,13 @@ from .base import BasePipeline
 
 
 def _discover_pipelines() -> Dict[str, BasePipeline]:
-    """扫描 pipelines/ 目录，发现所有 BasePipeline 子类并实例化"""
+    """扫描 pipelines/ 目录，发现所有 BasePipeline 子类并实例化
+    按 MMDP_WORKER_TYPE 环境变量过滤，只加载匹配类型的 Pipeline
+    """
     discovered: Dict[str, BasePipeline] = {}
     seen_ids: Dict[str, str] = {}  # pipeline_id -> module_name，用于检测重复
+
+    worker_type_filter = os.getenv("MMDP_WORKER_TYPE", "ALL").upper()
 
     package_dir = os.path.dirname(__file__)
 
@@ -48,10 +52,18 @@ def _discover_pipelines() -> Dict[str, BasePipeline]:
                 print(f"[pipeline] [WARN] {module_name}.{name} 未设置 pipeline_id，跳过")
                 continue
 
-            if pipeline_id in seen_ids:
+            # ── 按 worker_type 过滤（ALL 模式不过滤，注册全部）──
+            pipeline_worker_type = getattr(obj, "worker_type", "CPU").upper()
+            if worker_type_filter != "ALL" and pipeline_worker_type != worker_type_filter:
+                continue  # 跳过不匹配类型的 Pipeline
+
+            # ── 规范化：strip + upper，与后端 PipelineIdNormalizer 保持一致 ──
+            normalized_id = pipeline_id.strip().upper()
+
+            if normalized_id in seen_ids:
                 print(
-                    f"[pipeline] [ERR] pipeline_id '{pipeline_id}' 冲突: "
-                    f"{seen_ids[pipeline_id]}.{name} vs 已注册的实例，跳过"
+                    f"[pipeline] [ERR] pipeline_id '{normalized_id}' 冲突（原始='{pipeline_id}'）: "
+                    f"{seen_ids[normalized_id]}.{name} vs 已注册的实例，跳过"
                 )
                 continue
 
@@ -61,10 +73,10 @@ def _discover_pipelines() -> Dict[str, BasePipeline]:
                 print(f"[pipeline] [WARN] 实例化 {module_name}.{name} 失败: {e}")
                 continue
 
-            discovered[pipeline_id] = instance
-            seen_ids[pipeline_id] = f"{module_name}.{name}"
+            discovered[normalized_id] = instance
+            seen_ids[normalized_id] = f"{module_name}.{name}"
             print(
-                f"[pipeline] [OK] 注册 {pipeline_id} "
+                f"[pipeline] [OK] 注册 {normalized_id} "
                 f"({obj.display_name or obj.__name__}) <- {module_name}.py"
             )
 
@@ -77,12 +89,18 @@ def get_manifest() -> List[Dict]:
     for pipeline_id, instance in PIPELINES.items():
         cls = type(instance)
         if hasattr(cls, "manifest"):
-            manifest.append(cls.manifest())
+            entry = cls.manifest()
         else:
-            manifest.append({
+            entry = {
                 "pipeline_id": pipeline_id,
                 "display_name": getattr(instance, "display_name", ""),
-            })
+            }
+        # 确保 pipelineId 是规范化形式（dict key 已是规范化值，这里防御性处理）
+        if "pipelineId" in entry:
+            entry["pipelineId"] = entry["pipelineId"].strip().upper()
+        elif "pipeline_id" in entry:
+            entry["pipeline_id"] = entry["pipeline_id"].strip().upper()
+        manifest.append(entry)
     return manifest
 
 

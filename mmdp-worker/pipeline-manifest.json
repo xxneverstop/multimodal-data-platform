@@ -14,7 +14,8 @@
     ],
     "runtimeDependencies": [
       "ffmpeg"
-    ]
+    ],
+    "workerType": "CPU"
   },
   {
     "pipelineId": "BUILD_MOTION_VIEWER_DATA",
@@ -29,7 +30,8 @@
     ],
     "runtimeDependencies": [
       "numpy"
-    ]
+    ],
+    "workerType": "CPU"
   },
   {
     "pipelineId": "BUILD_PLAYBACK",
@@ -46,7 +48,8 @@
     ],
     "runtimeDependencies": [
       "ffmpeg"
-    ]
+    ],
+    "workerType": "CPU"
   },
   {
     "pipelineId": "BUILD_PLAYBACK_BUNDLE",
@@ -63,7 +66,8 @@
     ],
     "runtimeDependencies": [
       "ffprobe"
-    ]
+    ],
+    "workerType": "CPU"
   },
   {
     "pipelineId": "BUILD_STEREO_MP4",
@@ -79,7 +83,8 @@
     ],
     "runtimeDependencies": [
       "ffmpeg"
-    ]
+    ],
+    "workerType": "CPU"
   },
   {
     "pipelineId": "G1_CONVERT_TO_LEROBOT",
@@ -97,7 +102,8 @@
       "h5py",
       "numpy",
       "opencv-python"
-    ]
+    ],
+    "workerType": "CPU"
   },
   {
     "pipelineId": "G1_MERGE_CAMERA_ROBOT",
@@ -117,7 +123,8 @@
       "numpy",
       "scipy",
       "opencv-python"
-    ]
+    ],
+    "workerType": "GPU"
   },
   {
     "pipelineId": "MOTION_PHYSICS_METRICS",
@@ -132,7 +139,8 @@
     ],
     "runtimeDependencies": [
       "numpy"
-    ]
+    ],
+    "workerType": "CPU"
   },
   {
     "pipelineId": "MOTION_PHYSICS_METRICS_V2",
@@ -148,7 +156,8 @@
     "runtimeDependencies": [
       "torch",
       "numpy"
-    ]
+    ],
+    "workerType": "GPU"
   },
   {
     "pipelineId": "STEREO_IMU_ALIGN",
@@ -167,6 +176,7 @@
       "IMU_ALIGNED_CSV",
       "ALIGNMENT_REPORT"
     ],
-    "runtimeDependencies": []
+    "runtimeDependencies": [],
+    "workerType": "CPU"
   }
 ]

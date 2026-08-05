@@ -6,17 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.honortech.dataplatform.asset.dto.CreateDerivedAssetRequest;
 import com.honortech.dataplatform.asset.dto.DataAssetResponse;
 import com.honortech.dataplatform.asset.entity.DataAsset;
-import com.honortech.dataplatform.asset.service.DataAssetService;
 import com.honortech.dataplatform.asset.mapper.DataAssetMapper;
-import com.honortech.dataplatform.common.enums.AssetLineageRelationType;
-import com.honortech.dataplatform.common.enums.AssetType;
-import com.honortech.dataplatform.common.enums.ProcessingExecutorType;
-import com.honortech.dataplatform.common.enums.ProcessingJobStatus;
-import com.honortech.dataplatform.common.exception.BizException;
-import com.honortech.dataplatform.processing.PipelineIds;
-import com.honortech.dataplatform.asset.dto.CreateDerivedAssetRequest;
-import com.honortech.dataplatform.asset.dto.DataAssetResponse;
-import com.honortech.dataplatform.asset.entity.DataAsset;
 import com.honortech.dataplatform.asset.service.DataAssetService;
 import com.honortech.dataplatform.common.enums.AssetLineageRelationType;
 import com.honortech.dataplatform.common.enums.AssetType;
@@ -32,7 +22,6 @@ import com.honortech.dataplatform.file.entity.DataFile;
 import com.honortech.dataplatform.file.mapper.DataFileMapper;
 import com.honortech.dataplatform.pipeline.entity.PipelineDefinition;
 import com.honortech.dataplatform.pipeline.mapper.PipelineDefinitionMapper;
-import com.honortech.dataplatform.processing.PipelineIds;
 import com.honortech.dataplatform.processing.dto.CreateManualProcessingJobRequest;
 import com.honortech.dataplatform.processing.dto.CreateProcessingJobRequest;
 import com.honortech.dataplatform.processing.dto.CreateSessionJobRequest;
@@ -45,11 +34,13 @@ import com.honortech.dataplatform.processing.entity.AssetLineage;
 import com.honortech.dataplatform.processing.entity.ProcessingJob;
 import com.honortech.dataplatform.processing.mapper.AssetLineageMapper;
 import com.honortech.dataplatform.processing.mapper.ProcessingJobMapper;
+import com.honortech.dataplatform.processing.util.PipelineIdNormalizer;
 import com.honortech.dataplatform.session.entity.CollectionSession;
 import com.honortech.dataplatform.session.mapper.CollectionSessionMapper;
 import com.honortech.dataplatform.task.service.AcquisitionTaskService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -111,9 +102,10 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
     @Override
     @Transactional
     public ProcessingJobResponse createJob(Long taskId, CreateProcessingJobRequest request) {
-        log.info("[处理作业] 创建 task 作业(MOCK): taskId={}, pipelineId={}", taskId, request.pipelineId());
+        String pipelineId = PipelineIdNormalizer.normalize(request.pipelineId());
+        log.info("[处理作业] 创建 task 作业(MOCK): taskId={}, pipelineId={}", taskId, pipelineId);
         acquisitionTaskService.getTask(taskId);
-        validatePipelineId(request.pipelineId());
+        validatePipelineId(pipelineId);
 
         List<DataAsset> assets = dataAssetService.listByTaskId(taskId);
         List<String> missingAssets = REQUIRED_ASSETS.stream()
@@ -127,7 +119,7 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
 
         ProcessingJob job = new ProcessingJob();
         job.setTaskId(taskId);
-        job.setPipelineId(request.pipelineId());
+        job.setPipelineId(pipelineId);
         job.setExecutorType(ProcessingExecutorType.MOCK.name());
         job.setStatus(ProcessingJobStatus.CREATED.name());
         job.setParametersJson(writeJson(request.parameters()));
@@ -142,10 +134,11 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
     @Override
     @Transactional
     public ManualProcessingJobResponse createManualJob(Long taskId, CreateManualProcessingJobRequest request) {
+        String pipelineId = PipelineIdNormalizer.normalize(request.pipelineId());
         log.info("[处理作业] 创建手动登记作业(MANUAL): taskId={}, pipelineId={}, 输出资产数={}",
-                taskId, request.pipelineId(), request.outputAssets().size());
+                taskId, pipelineId, request.outputAssets().size());
         acquisitionTaskService.getTask(taskId);
-        validatePipelineId(request.pipelineId());
+        validatePipelineId(pipelineId);
         List<DataAsset> allAssets = dataAssetService.listByTaskId(taskId);
         List<DataAsset> inputAssets = request.inputAssetIds().stream()
                 .distinct()
@@ -157,7 +150,7 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
 
         ProcessingJob job = new ProcessingJob();
         job.setTaskId(taskId);
-        job.setPipelineId(request.pipelineId());
+        job.setPipelineId(pipelineId);
         job.setExecutorType(ProcessingExecutorType.MANUAL.name());
         job.setStatus(ProcessingJobStatus.SUCCESS.name());
         job.setOperatorName(request.operatorName());
@@ -276,7 +269,7 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
             }
             throw new BizException("Pipeline not found or disabled: " + pipelineId);
         }
-        log.info("[处理作业] Pipeline 校验通过: pipelineId='{}' (len={})", pipelineId, pipelineId.length());
+        log.info("[处理作业] Pipeline 校验通过: pipelineId='{}'", pipelineId);
     }
 
     private DataAsset createOutputAsset(Long taskId, Long jobId, CreateDerivedAssetRequest request) {
@@ -286,31 +279,103 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
     @Override
     @Transactional
     public ProcessingJobResponse createSessionJob(Long sessionId, CreateSessionJobRequest request) {
-        log.info("[处理作业] 创建 session 作业: sessionId={}, pipelineId={}, executorType=PYTHON_WORKER",
-                sessionId, request.pipelineId());
+        // ── 入口规范化 ──
+        String pipelineId = PipelineIdNormalizer.normalize(request.pipelineId());
+        log.info("[处理作业] 创建 session 作业: sessionId={}, pipelineId='{}', executorType=PYTHON_WORKER",
+                sessionId, pipelineId);
+
+        // ── 1. Session 校验 ──
         CollectionSession session = sessionMapper.selectById(sessionId);
         if (session == null) {
             log.warn("[处理作业] Session 不存在: {}", sessionId);
             throw new BizException("Session not found: " + sessionId);
         }
-        validatePipelineId(request.pipelineId());
 
-        // Worker 注册表校验：Pipeline 在 DB 中存在，还需确认 Worker 端已注册
-        if (!workerPipelineRegistry.isRegistered(request.pipelineId())) {
-            java.util.Set<String> registered = workerPipelineRegistry.getRegisteredIds();
-            log.warn("[处理作业] Pipeline '{}' 在DB中存在但Worker未注册. Worker已注册({}): {}",
-                    request.pipelineId(), registered.size(), registered);
+        // ── 2. Pipeline DB 校验 ──
+        validatePipelineId(pipelineId);
+        log.info("[处理作业] Pipeline DB 校验通过: {}", pipelineId);
+
+        // ── 3. 查询 Pipeline 定义（含 workerType）──
+        PipelineDefinition pipelineDef = pipelineDefMapper.selectOne(
+                new LambdaQueryWrapper<PipelineDefinition>()
+                        .eq(PipelineDefinition::getPipelineId, pipelineId));
+        String workerType = (pipelineDef != null && pipelineDef.getWorkerType() != null)
+                ? pipelineDef.getWorkerType().strip().toUpperCase() : "CPU";
+
+        // ── 4. Worker 在线校验（按 workerType 检查）──
+        if (!workerPipelineRegistry.isWorkerOnline(workerType)) {
+            log.warn("[处理作业] {} Worker 离线，拒绝创建: sessionId={}, pipelineId={}, lastRegisteredAt={}",
+                    workerType, sessionId, pipelineId, workerPipelineRegistry.getLastRegisteredAt(workerType));
             throw new BizException(String.format(
-                    "Pipeline '%s' 未在 Worker 端注册。请确认 Worker 已启动并包含该 Pipeline。" +
-                    "Worker 当前注册: %s",
-                    request.pipelineId(),
+                    "%s Worker 离线，无法创建处理任务。请确认 %s Worker 已启动。", workerType, workerType));
+        }
+        log.info("[处理作业] {} Worker 在线校验通过", workerType);
+
+        // ── 5. Worker 注册表校验（按 workerType 检查）──
+        if (!workerPipelineRegistry.isRegistered(workerType, pipelineId)) {
+            java.util.Set<String> registered = workerPipelineRegistry.getRegisteredIds(workerType);
+            log.warn("[处理作业] Pipeline '{}' 在DB中存在但{} Worker未注册. {} Worker已注册({}): {}",
+                    pipelineId, workerType, workerType, registered.size(), registered);
+            throw new BizException(String.format(
+                    "Pipeline '%s' 未在 %s Worker 端注册。请确认 %s Worker 已启动并包含该 Pipeline。" +
+                    "%s Worker 当前注册: %s",
+                    pipelineId, workerType, workerType,
                     registered.isEmpty() ? "(无)" : String.join(", ", registered)));
         }
+        log.info("[处理作业] {} Worker 注册校验通过: {}", workerType, pipelineId);
 
+        // ── 6. 重复提交检查 ──
+        List<ProcessingJob> activeJobs = processingJobMapper.selectList(
+                new LambdaQueryWrapper<ProcessingJob>()
+                        .eq(ProcessingJob::getSessionId, sessionId)
+                        .eq(ProcessingJob::getPipelineId, pipelineId)
+                        .in(ProcessingJob::getStatus,
+                                ProcessingJobStatus.CREATED.name(),
+                                ProcessingJobStatus.CLAIMED.name(),
+                                ProcessingJobStatus.RUNNING.name(),
+                                ProcessingJobStatus.SUCCESS.name()));
+        if (!activeJobs.isEmpty()) {
+            ProcessingJob existing = activeJobs.get(0);
+            String msg = ProcessingJobStatus.SUCCESS.name().equals(existing.getStatus())
+                    ? String.format("该 Pipeline 已成功处理 (Job #%d)，请先清除产物后可重新提交", existing.getId())
+                    : String.format("该 Pipeline 已有处理任务进行中 (Job #%d, 状态: %s)，请等待完成",
+                            existing.getId(), existing.getStatus());
+            log.warn("[处理作业] 重复提交被拒绝: sessionId={}, pipelineId={}, existingJobId={}, existingStatus={}",
+                    sessionId, pipelineId, existing.getId(), existing.getStatus());
+            throw new BizException(msg);
+        }
+
+        // ── 7. 输入文件检查（复用步骤3查出的 pipelineDef）──
+        List<String> requiredInputTypes = parseInputAssetTypes(
+                pipelineDef != null ? pipelineDef.getInputAssetTypes() : null);
+        if (requiredInputTypes != null && !requiredInputTypes.isEmpty()) {
+            List<DataFile> sessionFiles = dataFileMapper.selectList(
+                    new LambdaQueryWrapper<DataFile>()
+                            .eq(DataFile::getSessionId, sessionId));
+            boolean hasInput = sessionFiles.stream()
+                    .anyMatch(f -> f.getAssetType() != null && requiredInputTypes.contains(f.getAssetType()));
+            if (!hasInput) {
+                List<String> existingTypes = sessionFiles.stream()
+                        .map(DataFile::getAssetType)
+                        .filter(t -> t != null)
+                        .distinct()
+                        .sorted()
+                        .toList();
+                log.warn("[处理作业] 输入文件不齐: sessionId={}, pipelineId={}, required={}, existing={}",
+                        sessionId, pipelineId, requiredInputTypes, existingTypes);
+                throw new BizException(String.format(
+                        "缺少输入文件，Pipeline '%s' 需要以下类型之一: %s。当前 Session 已有类型: %s",
+                        pipelineId,
+                        String.join(", ", requiredInputTypes),
+                        existingTypes.isEmpty() ? "(无)" : String.join(", ", existingTypes)));
+            }
+        }
+
+        // ── 8. 创建 Job ──
         ProcessingJob job = new ProcessingJob();
         job.setTaskId(session.getTaskId());
         job.setSessionId(sessionId);
-        job.setPipelineId(request.pipelineId());
+        job.setPipelineId(pipelineId);
         job.setExecutorType(ProcessingExecutorType.PYTHON_WORKER.name());
         job.setStatus(ProcessingJobStatus.CREATED.name());
         job.setParametersJson(writeJson(request.parameters()));
@@ -318,8 +383,8 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
         job.setCreatedAt(LocalDateTime.now());
         job.setUpdatedAt(LocalDateTime.now());
         processingJobMapper.insert(job);
-        log.info("[处理作业] 作业已创建: jobId={}, pipelineId={}, status=CREATED, 等待 Worker 领取",
-                job.getId(), job.getPipelineId());
+        log.info("[处理作业] 作业已创建: jobId={}, pipelineId='{}', status=CREATED, sessionId={}, 等待 Worker 领取",
+                job.getId(), pipelineId, sessionId);
         return toResponse(job);
     }
 
@@ -347,18 +412,48 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
 
     @Override
     @Transactional
-    public WorkerClaimResponse claimJob() {
-        ProcessingJob job = processingJobMapper.selectOne(
+    public WorkerClaimResponse claimJob(String workerType) {
+        String wt = (workerType == null || workerType.isBlank()) ? "CPU" : workerType.strip().toUpperCase();
+        // 获取所有 CREATED+PYTHON_WORKER 作业，按创建时间升序
+        List<ProcessingJob> candidates = processingJobMapper.selectList(
                 new LambdaQueryWrapper<ProcessingJob>()
                         .eq(ProcessingJob::getStatus, ProcessingJobStatus.CREATED.name())
                         .eq(ProcessingJob::getExecutorType, ProcessingExecutorType.PYTHON_WORKER.name())
-                        .orderByAsc(ProcessingJob::getCreatedAt)
-                        .last("LIMIT 1"));
+                        .orderByAsc(ProcessingJob::getCreatedAt));
+        if (!candidates.isEmpty()) {
+            log.info("[Worker] claimJob(workerType={}) — 当前CREATED+PYTHON_WORKER作业数: {}", wt, candidates.size());
+        }
+        // 遍历找到第一个属于该 workerType 的 Pipeline Job（ALL 模式不过滤）
+        ProcessingJob job = null;
+        if ("ALL".equals(wt)) {
+            // 本地开发模式：领取任意 CREATED Job，不限制 Pipeline 类型
+            job = candidates.isEmpty() ? null : candidates.get(0);
+        } else {
+            for (ProcessingJob candidate : candidates) {
+                PipelineDefinition def = pipelineDefMapper.selectOne(
+                        new LambdaQueryWrapper<PipelineDefinition>()
+                                .eq(PipelineDefinition::getPipelineId, candidate.getPipelineId()));
+                String jobWorkerType = (def != null && def.getWorkerType() != null)
+                        ? def.getWorkerType().strip().toUpperCase() : "CPU";
+                if (wt.equals(jobWorkerType)) {
+                    job = candidate;
+                    break;
+                }
+            }
+        }
         if (job == null) {
+            if (!candidates.isEmpty()) {
+                // 有 CREATED 作业但不属于当前 workerType，记录诊断
+                List<String> types = candidates.stream()
+                        .map(c -> c.getPipelineId() + "(" + c.getStatus() + ")")
+                        .toList();
+                log.info("[Worker] claimJob(workerType={}): 无匹配的 CREATED 作业，候选作业(不同workerType): {}",
+                        wt, types);
+            }
             return null;
         }
-        log.info("[Worker] 作业被领取: jobId={}, pipelineId={}, sessionId={}",
-                job.getId(), job.getPipelineId(), job.getSessionId());
+        log.info("[Worker] 作业被领取(workerType={}): jobId={}, pipelineId='{}', sessionId={}",
+                wt, job.getId(), job.getPipelineId(), job.getSessionId());
         job.setStatus(ProcessingJobStatus.CLAIMED.name());
         job.setUpdatedAt(LocalDateTime.now());
         processingJobMapper.updateById(job);
@@ -411,6 +506,12 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
         if (job == null) {
             log.warn("[Worker] 上报成功的作业不存在: jobId={}", jobId);
             throw new BizException("Processing job not found: " + jobId);
+        }
+        // 幂等：已 SUCCESS 则直接返回（Worker 重试导致）
+        if (ProcessingJobStatus.SUCCESS.name().equals(job.getStatus())) {
+            log.info("[Worker] 作业已处于 SUCCESS，幂等跳过: jobId={}, pipelineId={}",
+                    jobId, job.getPipelineId());
+            return;
         }
         log.info("[Worker] 作业上报成功: jobId={}, pipelineId={}, 产物数={}",
                 jobId, job.getPipelineId(), request.outputFiles().size());
@@ -475,25 +576,48 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
             log.warn("[Worker] 上报失败的作业不存在: jobId={}", jobId);
             throw new BizException("Processing job not found: " + jobId);
         }
-        String errorMsg = request.errorMessage();
-        log.error("[Worker] 作业上报失败: jobId={}, pipelineId='{}', status={}, error={}",
-                jobId, job.getPipelineId(), job.getStatus(), errorMsg);
-        // 如果错误信息是 "Unknown pipeline"，额外打印全部已注册 pipeline 便于排查
-        if (errorMsg != null && errorMsg.startsWith("Unknown pipeline:")) {
-            List<PipelineDefinition> all = pipelineDefMapper.selectList(
-                    new LambdaQueryWrapper<PipelineDefinition>().select(
-                            PipelineDefinition::getPipelineId, PipelineDefinition::getEnabled));
-            List<String> allIds = all.stream()
-                    .map(p -> p.getPipelineId() + "(enabled=" + p.getEnabled() + ")")
-                    .toList();
-            log.error("[Worker] Unknown pipeline 诊断 — DB中pipeline({}): {}; "
-                      + "job创建时间={}, executor={}",
-                    all.size(), allIds, job.getCreatedAt(), job.getExecutorType());
+        // 幂等：已 FAILED 则直接返回（Worker 重试导致）
+        if (ProcessingJobStatus.FAILED.name().equals(job.getStatus())) {
+            log.info("[Worker] 作业已处于 FAILED，幂等跳过: jobId={}, pipelineId={}",
+                    jobId, job.getPipelineId());
+            return;
         }
+        String errorMsg = request.errorMessage();
+        log.error("[Worker] 作业上报失败: jobId={}, pipelineId='{}', error={}",
+                jobId, job.getPipelineId(), errorMsg);
         job.setStatus(ProcessingJobStatus.FAILED.name());
         job.setErrorMessage(errorMsg);
         job.setUpdatedAt(LocalDateTime.now());
         processingJobMapper.updateById(job);
+    }
+
+    /**
+     * CLAIMED 超时回收：每 30 秒扫描 CLAIMED 超过 5 分钟的 PYTHON_WORKER 作业，
+     * 回退为 CREATED。防止 Worker 崩溃后 job 永久卡死。
+     */
+    @Scheduled(fixedRate = 30_000)
+    @Transactional
+    public void reclaimTimedOutJobs() {
+        LocalDateTime threshold = LocalDateTime.now().minusMinutes(5);
+        List<ProcessingJob> stuckJobs = processingJobMapper.selectList(
+                new LambdaQueryWrapper<ProcessingJob>()
+                        .eq(ProcessingJob::getStatus, ProcessingJobStatus.CLAIMED.name())
+                        .eq(ProcessingJob::getExecutorType, ProcessingExecutorType.PYTHON_WORKER.name())
+                        .lt(ProcessingJob::getUpdatedAt, threshold));
+
+        if (stuckJobs.isEmpty()) {
+            return;
+        }
+
+        for (ProcessingJob job : stuckJobs) {
+            long stuckSeconds = java.time.Duration.between(job.getUpdatedAt(), LocalDateTime.now()).getSeconds();
+            log.warn("[超时回收] jobId={}, pipelineId='{}', 已 CLAIMED {} 秒，回退为 CREATED",
+                    job.getId(), job.getPipelineId(), stuckSeconds);
+            job.setStatus(ProcessingJobStatus.CREATED.name());
+            job.setUpdatedAt(LocalDateTime.now());
+            processingJobMapper.updateById(job);
+        }
+        log.info("[超时回收] 已回收 {} 个超时 Job", stuckJobs.size());
     }
 
     private String writeJson(JsonNode node) {

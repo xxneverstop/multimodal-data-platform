@@ -41,6 +41,10 @@ deploy/frontend/dist/
 deploy/worker/src/
 deploy/python3-10-slim.tar
 deploy/worker/smpl_models/
+deploy/worker/ZED_SDK_*.run
+deploy/*-deploy.tar.gz
+deploy/*-update.tar.gz
+docker-container/
 docs/deployment/*.html
 docs/deployment/*.png
 
