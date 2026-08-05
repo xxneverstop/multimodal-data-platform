@@ -73,12 +73,21 @@ copy /y "mmdp-backend\src\main\resources\schema.sql" "deploy\initdb\schema.sql" 
 REM Worker source code
 echo [5/6] Copying Worker source code...
 if exist "deploy\worker\src" rmdir /s /q "deploy\worker\src"
-xcopy /e /q /i "mmdp-worker" "deploy\worker\src" >nul
-REM 移除不需要部署的 __pycache__ 和 pipeline-manifest.json
-for /d /r "deploy\worker\src" %%d in (__pycache__) do @if exist "%%d" rmdir /s /q "%%d" 2>nul
-if exist "deploy\worker\src\pipeline-manifest.json" del /q "deploy\worker\src\pipeline-manifest.json" 2>nul
-if %errorlevel% neq 0 (
+robocopy "mmdp-worker" "deploy\worker\src" /MIR /NFL /NDL /NJH /NJS /NP ^
+    /XD .idea .agents __pycache__ ^
+    /XF .env .env.* *.pyc *.pyo *.whl pipeline-manifest.json test-*.py >nul
+if errorlevel 8 (
     echo [ERROR] Failed to copy Worker source!
+    pause
+    exit /b 1
+)
+if exist "deploy\worker\src\.env" (
+    echo [ERROR] Sensitive Worker .env was copied unexpectedly!
+    pause
+    exit /b 1
+)
+if not exist "deploy\worker\src\requirements-gpu.txt" (
+    echo [ERROR] Missing deploy\worker\src\requirements-gpu.txt!
     pause
     exit /b 1
 )
@@ -90,8 +99,7 @@ echo  Deploy package ready at: %SCRIPT_DIR%deploy\
 echo ============================================
 echo.
 echo Next steps:
-echo   1. Edit deploy\.env and fill in real secrets.
-echo   2. Upload the entire deploy\ folder to /data/mmdp on the server.
-echo   3. On server: cd /data/mmdp ^&^& docker compose up -d --build
+echo   Follow docs\deployment\MMDP_GPU_Worker_Deployment_Guide.md.
+echo   Do not upload deploy\.env or nest deploy\ under /data/mmdp.
 echo.
 pause

@@ -2,7 +2,7 @@
 # 启动前：
 #   1. 确认 NVIDIA Container Toolkit 已安装：nvidia-ctk --version
 #   2. 确认 CUDA 13 容器可运行：docker run --rm --gpus all nvidia/cuda:13.0.0-base-ubuntu22.04 nvidia-smi
-#   3. cp .env.gpu .env && 填写 OSS 凭证
+#   3. cp .env.gpu.example .env && 填写 OSS 凭证
 # 启动：docker compose -f docker-compose.gpu.yml up -d
 # 查看日志：docker logs -f mmdp-worker-gpu
 
@@ -22,6 +22,7 @@ services:
       MMDP_OSS_ACCESS_KEY_ID: ${MMDP_OSS_ACCESS_KEY_ID}
       MMDP_OSS_ACCESS_KEY_SECRET: ${MMDP_OSS_ACCESS_KEY_SECRET}
       MMDP_OSS_BUCKET: ${MMDP_OSS_BUCKET:-mmdp-test}
+      MMDP_OSS_REGION: ${MMDP_OSS_REGION:-cn-hangzhou}
       # Worker 配置
       MMDP_WORKER_TYPE: "GPU"
       MMDP_PHYSICS_DEVICE: "cuda"

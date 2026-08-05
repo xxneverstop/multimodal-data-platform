@@ -1,0 +1,11 @@
+ZED_SDK_*.run
+smpl_models/
+src/.env
+src/.env.*
+src/.idea/
+src/.agents/
+src/**/__pycache__/
+src/**/*.py[cod]
+src/**/*.whl
+src/test-*.py
+src/pipeline-manifest.json

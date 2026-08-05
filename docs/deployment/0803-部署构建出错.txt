@@ -1,0 +1,99 @@
+CPU服务器：
+      copying src/evdev/device.py -> build/lib.linux-x86_64-cpython-310/evdev
+      running egg_info
+      writing src/evdev.egg-info/PKG-INFO
+      writing dependency_links to src/evdev.egg-info/dependency_links.txt
+      writing top-level names to src/evdev.egg-info/top_level.txt
+      reading manifest file 'src/evdev.egg-info/SOURCES.txt'
+      reading manifest template 'MANIFEST.in'
+      warning: no previously-included files found matching 'src/evdev/ecodes.c'
+      adding license file 'LICENSE'
+      writing manifest file 'src/evdev.egg-info/SOURCES.txt'
+      copying src/evdev/input.c -> build/lib.linux-x86_64-cpython-310/evdev
+      copying src/evdev/py.typed -> build/lib.linux-x86_64-cpython-310/evdev
+      copying src/evdev/uinput.c -> build/lib.linux-x86_64-cpython-310/evdev
+      running build_ext
+      running build_ecodes
+      writing /tmp/pip-install-98jtqn8d/evdev_5189aca0877846e2ab6056fd9944c8fd/src/evdev/ecodes.c (using /usr/include/linux/input.h /usr/include/linux/input-event-codes.h /usr/include/linux/uinput.h)
+      building 'evdev._input' extension
+      creating build/temp.linux-x86_64-cpython-310/src/evdev
+      gcc -Wno-unused-result -Wsign-compare -DNDEBUG -g -fwrapv -O3 -Wall -fPIC -I/usr/local/include/python3.10 -c src/evdev/input.c -o build/temp.linux-x86_64-cpython-310/src/evdev/input.o -std=c99 -Wno-error=declaration-after-statement
+      In file included from /usr/lib/gcc/x86_64-linux-gnu/14/include/syslimits.h:7,
+                       from /usr/lib/gcc/x86_64-linux-gnu/14/include/limits.h:34,
+                       from /usr/local/include/python3.10/Python.h:11,
+                       from src/evdev/input.c:10:
+      /usr/lib/gcc/x86_64-linux-gnu/14/include/limits.h:210:15: fatal error: limits.h: No such file or directory
+        210 | #include_next <limits.h>                /* recurse down to the real one */
+            |               ^~~~~~~~~~
+      compilation terminated.
+      error: command '/usr/bin/gcc' failed with exit code 1
+      [end of output]
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+  ERROR: Failed building wheel for evdev
+Successfully built oss2 aliyun-python-sdk-core crcmod
+Failed to build evdev
+ERROR: Could not build wheels for evdev, which is required to install pyproject.toml-based projects
+
+[notice] A new release of pip is available: 23.0.1 -> 26.2
+[notice] To update, run: pip install --upgrade pip
+The command '/bin/sh -c pip install --no-cache-dir --default-timeout 600     -i https://pypi.tuna.tsinghua.edu.cn/simple     -r requirements.txt' returned a non-zero code: 1
+ERROR: Service 'mmdp-worker' failed to build : Build failed
+root@iZbp1hq2o77hv60nmidyd5Z:/data/mmdp/deploy# 
+
+
+
+
+
+GPU服务器：
+root@iZbp1fanxpewrb1b806gswZ:/data/mmdp-gpu# docker compose -f docker-compose.gpu.yml up -d --build
+[+] Building 2911.4s (11/17)                                                                                                             
+ => [internal] load local bake definitions                                                                                          0.0s
+ => => reading from stdin 534B                                                                                                      0.0s
+ => [internal] load build definition from Dockerfile.gpu                                                                            0.0s
+ => => transferring dockerfile: 1.72kB                                                                                              0.0s
+ => [internal] load metadata for docker.io/nvidia/cuda:13.0.0-runtime-ubuntu22.04                                                   0.0s
+ => [internal] load .dockerignore                                                                                                   0.0s
+ => => transferring context: 2B                                                                                                     0.0s
+ => CACHED [ 1/12] FROM docker.io/nvidia/cuda:13.0.0-runtime-ubuntu22.04@sha256:3e7f34f5e9dd5315b67ab30d71a92e578c5911236e14370647  0.0s
+ => => resolve docker.io/nvidia/cuda:13.0.0-runtime-ubuntu22.04@sha256:3e7f34f5e9dd5315b67ab30d71a92e578c5911236e14370647df020bdee  0.0s
+ => [internal] load build context                                                                                                   0.0s
+ => => transferring context: 2.13kB                                                                                                 0.0s
+ => [ 2/12] RUN apt-get update && apt-get install -y --no-install-recommends     python3.10 python3-pip     ffmpeg zstd     libx  669.1s
+ => [ 3/12] WORKDIR /app                                                                                                            0.1s 
+ => [ 4/12] COPY ZED_SDK_Ubuntu22_cuda13.0_tensorrt10.13_v5.4.1.zstd.run /tmp/ZED_SDK.run                                          12.8s 
+ => [ 5/12] RUN chmod +x /tmp/ZED_SDK.run     && /tmp/ZED_SDK.run -- silent skip_cuda=true     && rm /tmp/ZED_SDK.run            2228.4s 
+ => ERROR [ 6/12] RUN pip3 install --no-cache-dir --break-system-packages     --index-url https://pypi.tuna.tsinghua.edu.cn/simple  0.8s 
+------                                                                                                                                   
+ > [ 6/12] RUN pip3 install --no-cache-dir --break-system-packages     --index-url https://pypi.tuna.tsinghua.edu.cn/simple     /usr/local/zed/pyzed/:                                                                                                                            
+0.694                                                                                                                                    
+0.694 Usage:                                                                                                                             
+0.694   pip3 install [options] <requirement specifier> [package-index-options] ...                                                       
+0.694   pip3 install [options] -r <requirements file> [package-index-options] ...
+0.694   pip3 install [options] [-e] <vcs project url> ...
+0.694   pip3 install [options] [-e] <local project path> ...
+0.694   pip3 install [options] <archive url/path> ...
+0.694 
+0.694 no such option: --break-system-packages
+------
+[+] up 0/1
+ ⠙ Image mmdp-worker-gpu:latest Building                                                                                          2911.4s
+Dockerfile.gpu:21
+
+--------------------
+
+  20 |     # 安装 pyzed（ZED SDK Python 绑定）
+
+  21 | >>> RUN pip3 install --no-cache-dir --break-system-packages \
+
+  22 | >>>     --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+
+  23 | >>>     /usr/local/zed/pyzed/
+
+  24 |     
+
+--------------------
+
+failed to solve: process "/bin/sh -c pip3 install --no-cache-dir --break-system-packages     --index-url https://pypi.tuna.tsinghua.edu.cn/simple     /usr/local/zed/pyzed/" did not complete successfully: exit code: 2
+
+root@iZbp1fanxpewrb1b806gswZ:/data/mmdp-gpu# 
