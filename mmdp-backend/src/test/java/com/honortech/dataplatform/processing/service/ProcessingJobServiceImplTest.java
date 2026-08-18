@@ -17,6 +17,7 @@ import com.honortech.dataplatform.processing.dto.CreateManualProcessingJobReques
 import com.honortech.dataplatform.processing.dto.CreateProcessingJobRequest;
 import com.honortech.dataplatform.processing.dto.ManualProcessingJobResponse;
 import com.honortech.dataplatform.processing.dto.ProcessingJobResponse;
+import com.honortech.dataplatform.processing.dto.WorkerClaimResponse;
 import com.honortech.dataplatform.processing.entity.AssetLineage;
 import com.honortech.dataplatform.processing.entity.ProcessingJob;
 import com.honortech.dataplatform.processing.mapper.AssetLineageMapper;
@@ -33,9 +34,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ProcessingJobServiceImplTest {
@@ -200,6 +204,26 @@ class ProcessingJobServiceImplTest {
         )));
 
         assertEquals("Each output asset must provide exactly one of fileId or externalPath", exception.getMessage());
+    }
+
+    @Test
+    void shouldNotClaimPipelineUnsupportedByWorker() {
+        ProcessingJob job = new ProcessingJob();
+        job.setId(101L);
+        job.setPipelineId("G1_GENERATE_PLAYBACK");
+        job.setStatus("CREATED");
+        job.setExecutorType("PYTHON_WORKER");
+        when(processingJobMapper.selectList(any())).thenReturn(List.of(job));
+
+        PipelineDefinition def = validPipelineDef();
+        def.setPipelineId("G1_GENERATE_PLAYBACK");
+        def.setWorkerType("CPU");
+        when(pipelineDefMapper.selectOne(any())).thenReturn(def);
+
+        WorkerClaimResponse response = service.claimJob("CPU", List.of("BUILD_PLAYBACK"));
+
+        assertNull(response);
+        verify(processingJobMapper, never()).updateById(any(ProcessingJob.class));
     }
 
     private PipelineDefinition validPipelineDef() {

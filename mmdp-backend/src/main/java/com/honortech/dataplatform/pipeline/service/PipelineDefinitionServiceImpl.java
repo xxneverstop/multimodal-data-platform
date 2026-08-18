@@ -31,6 +31,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -179,7 +180,9 @@ public class PipelineDefinitionServiceImpl implements PipelineDefinitionService 
                         .eq(PipelineDefinition::getEnabled, 1));
 
         // 2. 获取 session 现有资产类型（用于输入文件校验）
-        List<DataAsset> assets = dataAssetService.listByTaskId(session.getTaskId());
+        List<DataAsset> assets = dataAssetService.listByTaskId(session.getTaskId()).stream()
+                .filter(asset -> Objects.equals(asset.getSessionId(), sessionId))
+                .toList();
         List<String> existingAssetTypes = assets.stream()
                 .map(DataAsset::getAssetType)
                 .filter(type -> type != null)
@@ -194,7 +197,7 @@ public class PipelineDefinitionServiceImpl implements PipelineDefinitionService 
                 .collect(Collectors.groupingBy(
                         ProcessingJob::getPipelineId,
                         Collectors.collectingAndThen(
-                                Collectors.maxBy(Comparator.comparing(ProcessingJob::getCreatedAt)),
+                                Collectors.maxBy(Comparator.comparing(ProcessingJob::getId)),
                                 opt -> opt.orElse(null))));
 
         // 4. 遍历每个 pipeline，计算可用性

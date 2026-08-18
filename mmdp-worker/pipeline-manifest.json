@@ -106,6 +106,23 @@
     "workerType": "CPU"
   },
   {
+    "pipelineId": "G1_GENERATE_PLAYBACK",
+    "displayName": "G1可视化播放资产生成",
+    "description": "从合并后的G1 HDF5中提取左相机图像，生成可在线播放的MP4",
+    "version": "1.0.0",
+    "inputAssetTypes": [
+      "G1_MERGED_HDF5"
+    ],
+    "outputAssetTypes": [
+      "RGB_VIDEO_MP4"
+    ],
+    "runtimeDependencies": [
+      "h5py",
+      "ffmpeg"
+    ],
+    "workerType": "CPU"
+  },
+  {
     "pipelineId": "G1_MERGE_CAMERA_ROBOT",
     "displayName": "G1相机-机器人数据合并",
     "description": "将ZED双目相机SVO2数据与机器人HDF5遥操作数据合并：时间戳对齐、图像JPEG压缩、计算delta EEF/delta Height",

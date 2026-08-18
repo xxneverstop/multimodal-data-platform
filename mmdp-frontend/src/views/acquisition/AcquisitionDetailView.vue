@@ -68,7 +68,7 @@
             <th>上传时间</th>
             <th>配置</th>
             <th>资产 / 文件</th>
-            <th style="width: 140px">操作</th>
+            <th style="width: 220px">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -104,6 +104,11 @@
             <td>
               <div class="light2-actions">
                 <RouterLink :to="`/play/${session.sessionId}`" class="light2-btn light2-btn-sec light2-btn-sm">播放</RouterLink>
+                <a
+                  v-if="session.id && session.fileCount > 0"
+                  :href="`/api/sessions/${session.id}/download`"
+                  class="light2-btn light2-btn-sec light2-btn-sm"
+                >批量下载</a>
                 <RouterLink :to="`/sessions/${session.sessionId}`" class="light2-btn light2-btn-sec light2-btn-sm">详情</RouterLink>
               </div>
             </td>

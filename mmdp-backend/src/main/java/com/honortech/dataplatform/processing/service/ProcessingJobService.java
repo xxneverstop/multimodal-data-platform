@@ -30,8 +30,8 @@ public interface ProcessingJobService {
     /** 列出全部处理任务（按时间倒序，最近 50 条） */
     List<ProcessingJobResponse> listAllJobs();
 
-    /** Worker 领取一个 PENDING 任务（仅下发与 workerType 匹配的 Pipeline Job），无任务返回 null */
-    WorkerClaimResponse claimJob(String workerType);
+    /** Worker 领取一个 PENDING 任务（仅下发当前进程支持的 Pipeline Job），无任务返回 null */
+    WorkerClaimResponse claimJob(String workerType, List<String> pipelineIds);
 
     /** Worker 上报成功 */
     void completeJob(Long jobId, WorkerSuccessRequest request);

@@ -57,8 +57,8 @@ INSERT INTO collection_profile_source (
  NULL, NULL, 1, 1, NOW(), NOW()),
 
 (@g1_profile_id, 'camera_svo2', 'ZED双目相机录制', 'file', 'CAM_ZED',
- 1, '%episode_%.svo2', 'G1_CAMERA_SVO2', NULL,
- NULL, NULL, 2, 1, NOW(), NOW());
+ 1, '%episode_%.svo2', 'G1_CAMERA_SVO2', 'video',
+ 20, NULL, 2, 1, NOW(), NOW());
 
 -- ============================================
 -- 4. Profile-Pipeline 关联
