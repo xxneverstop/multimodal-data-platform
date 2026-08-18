@@ -41,7 +41,12 @@ public class WorkerJobController {
             @RequestBody(required = false) WorkerClaimRequest request) {
         String workerType = (request != null && request.workerType() != null)
                 ? request.workerType().strip().toUpperCase() : "ALL";
-        WorkerClaimResponse response = processingJobService.claimJob(workerType);
+        List<String> pipelineIds = request == null || request.pipelineIds() == null
+                ? List.of()
+                : request.pipelineIds().stream()
+                        .map(PipelineIdNormalizer::normalize)
+                        .toList();
+        WorkerClaimResponse response = processingJobService.claimJob(workerType, pipelineIds);
         if (response == null) {
             return ApiResponse.success("No pending job for workerType=" + workerType, null);
         }

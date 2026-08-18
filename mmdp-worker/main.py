@@ -116,7 +116,7 @@ def claim_job() -> dict | None:
     def _do():
         resp = requests.post(
             f"{BACKEND_URL}/api/worker/jobs/claim",
-            json={"workerType": WORKER_TYPE},
+            json={"workerType": WORKER_TYPE, "pipelineIds": list(PIPELINES.keys())},
             timeout=10
         )
         data = resp.json()

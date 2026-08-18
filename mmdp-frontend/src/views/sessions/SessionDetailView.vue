@@ -32,8 +32,16 @@
       </div>
 
       <div class="light2-actions">
+        <BaseButton
+          v-if="detail.session.id && detail.session.fileCount > 0"
+          :href="`/api/sessions/${detail.session.id}/download`"
+          variant="secondary"
+          tone="session"
+        >
+          批量下载
+        </BaseButton>
         <a v-if="hasMotionViewerData" :href="`/motion-view/${detail.session.id}`" target="_blank" class="light2-btn light2-btn-primary" style="text-decoration:none">3D 动作查看</a>
-        <a v-if="playbackReady" :href="`/play/${detail.session.sessionId}`" target="_blank" class="light2-btn" style="text-decoration:none;background:var(--color-brand-500);color:#fff;border-radius:8px;padding:7px 17px;font-size:13px;font-weight:600">数据回放</a>
+        <a v-if="playbackReady" :href="playbackHref" target="_blank" class="light2-btn" style="text-decoration:none;background:var(--color-brand-500);color:#fff;border-radius:8px;padding:7px 17px;font-size:13px;font-weight:600">数据回放</a>
         <BaseButton v-else variant="soft" tone="session" disabled title="当前数据不满足播放规则，请先执行处理任务">数据回放</BaseButton>
         <BaseButton :to="`/export?sessionId=${detail.session.sessionId}`" variant="secondary" tone="export">
           查看导出
@@ -137,34 +145,64 @@
             <span class="light2-panel-sub">{{ availablePipelines.length }} 个处理规则</span>
           </div>
           <div v-if="!availablePipelines.length" class="light2-empty-state">该 Profile 下暂无可用处理规则，请先在「处理」页面创建规则并关联 Profile。</div>
-          <div v-else class="light2-job-list">
-            <article v-for="p in availablePipelines" :key="p.pipelineId" class="light2-job-row">
-              <div class="light2-job-code">{{ p.pipelineId }}</div>
-              <div class="light2-job-name">
-                {{ p.displayName }}
-                <span v-if="p.latestJobStatus" class="light2-badge" :class="jobStatusBadgeClass(p.latestJobStatus)" style="margin-left:8px;font-size:11px">{{ jobStatusLabel(p.latestJobStatus) }}</span>
+          <div v-else class="processing-rule-list">
+            <article
+              v-for="p in availablePipelines"
+              :key="p.pipelineId"
+              class="processing-rule-row"
+              :class="pipelineStateClass(p)"
+            >
+              <div class="processing-rule-identity">
+                <div class="processing-rule-meta">
+                  <span class="processing-rule-code">{{ p.pipelineId }}</span>
+                  <span class="processing-rule-separator" aria-hidden="true" />
+                  <span>{{ p.executorType }}</span>
+                </div>
+                <div class="processing-rule-name">
+                  {{ p.displayName }}
+                  <span v-if="pipelineLatestStatus(p)" class="light2-badge" :class="jobStatusBadgeClass(pipelineLatestStatus(p)!)">
+                    {{ jobStatusLabel(pipelineLatestStatus(p)!) }}
+                  </span>
+                </div>
               </div>
-              <div class="light2-job-time" style="color:var(--color-text-tertiary);font-size:12px">{{ p.executorType }}</div>
-              <div class="light2-job-duration" style="font-size:12px">
-                <span v-if="!p.isReady && p.blockedReason" :style="{color: blockedReasonColor(p)}">{{ p.blockedReason }}</span>
+
+              <div class="processing-rule-state" role="status">
+                <span class="processing-rule-state-mark" aria-hidden="true" />
+                <div class="processing-rule-state-copy">
+                  <div class="processing-rule-state-title">{{ pipelineStateTitle(p) }}</div>
+                  <div class="processing-rule-state-detail">{{ pipelineStateDetail(p) }}</div>
+                </div>
               </div>
-              <div class="light2-job-status">
+
+              <div class="processing-rule-action">
                 <button
-                  class="light2-btn light2-btn-sm"
-                  :class="pipelineButtonClass(p)"
-                  @click="executePipeline(p)"
-                  :disabled="!p.isReady || executingPipelineId === p.pipelineId"
+                  v-if="canCleanupPipeline(p)"
+                  class="light2-btn light2-btn-sm processing-rule-cleanup-btn"
+                  @click="cleanupPipelineOutputs(p)"
                 >
-                  {{ pipelineButtonText(p) }}
+                  清除产物
+                </button>
+                <button
+                  v-else
+                  class="light2-btn light2-btn-sm"
+                  :class="canExecutePipeline(p) ? 'light2-btn-primary' : 'light2-btn-sec'"
+                  @click="executePipeline(p)"
+                  :disabled="!canExecutePipeline(p) || executingPipelineId === p.pipelineId"
+                >
+                  {{ pipelineActionText(p) }}
                 </button>
               </div>
             </article>
           </div>
-          <p v-if="executeError" style="color:#d92d20;font-size:12px;margin-top:8px">{{ executeError }}</p>
-          <p v-if="executeSuccess" style="color:#0d9444;font-size:12px;margin-top:8px">
-            任务已提交！
-            <RouterLink to="/processing" style="color:#2563eb;text-decoration:underline">查看处理状态 →</RouterLink>
-          </p>
+          <div v-if="executeError" class="processing-feedback processing-feedback-error" role="alert">
+            <span class="processing-feedback-mark" aria-hidden="true" />
+            <span>{{ executeError }}</span>
+          </div>
+          <div v-if="executeSuccess" class="processing-feedback processing-feedback-success" role="status">
+            <span class="processing-feedback-mark" aria-hidden="true" />
+            <span>任务已提交，状态将自动更新。</span>
+            <RouterLink to="/processing" class="processing-feedback-link">查看处理状态 →</RouterLink>
+          </div>
         </section>
 
         <section class="light2-panel">
@@ -275,7 +313,7 @@
         <section class="light2-info-card">
           <div class="light2-info-card-hdr">快捷操作</div>
           <div class="light2-quick-actions">
-            <BaseButton :to="playbackReady ? `/play/${detail.session.sessionId}` : undefined" variant="soft" tone="session" block :disabled="!playbackReady" :title="playbackReady ? '' : '当前数据不满足播放规则'">数据回放</BaseButton>
+            <BaseButton :to="playbackReady ? playbackHref : undefined" variant="soft" tone="session" block :disabled="!playbackReady" :title="playbackReady ? '' : '当前数据不满足播放规则'">数据回放</BaseButton>
             <BaseButton :to="`/export?sessionId=${detail.session.sessionId}`" variant="secondary" tone="export" block>
               导出数据
             </BaseButton>
@@ -378,9 +416,25 @@ const assetPreviewLimit = 8;
 
 // --- 可用处理 ---
 const availablePipelines = ref<PipelineDefinitionResponse[]>([]);
+const pipelineOrder: Record<string, number> = {
+  G1_MERGE_CAMERA_ROBOT: 1,
+  G1_CONVERT_TO_LEROBOT: 2,
+  G1_GENERATE_PLAYBACK: 3,
+};
 const sessionJobs = ref<ProcessingJobResponse[]>([]);
 const executingPipelineId = ref<string | null>(null);
 const playbackReady = ref(false);            // Session 级别：原始+全部产物是否满足播放规则
+const latestG1PlaybackJobId = computed(() => {
+  const ids = sessionJobs.value
+    .filter(job => job.pipelineId === "G1_GENERATE_PLAYBACK" && job.status === "SUCCESS")
+    .map(job => job.id);
+  return ids.length ? Math.max(...ids) : null;
+});
+const playbackHref = computed(() => {
+  const sessionId = detail.value?.session?.sessionId ?? "";
+  const jobId = latestG1PlaybackJobId.value;
+  return `/play/${sessionId}${jobId == null ? "" : `?jobId=${jobId}`}`;
+});
 const executeError = ref("");
 const executeSuccess = ref(false);
 
@@ -403,6 +457,12 @@ function startPolling(sessionId: number, sessionCode: string) {
         stopPolling();
         // 终态时刷新详情（产物列表）
         detail.value = await fetchSessionDetail(sessionCode);
+        availablePipelines.value = (await fetchAvailablePipelines(sessionId))
+          .sort((a, b) => (pipelineOrder[a.pipelineId] ?? 99) - (pipelineOrder[b.pipelineId] ?? 99));
+        playbackReady.value = await checkSessionPlayback(
+          sessionCode,
+          latestG1PlaybackJobId.value ?? undefined,
+        );
       }
     } catch {
       // 轮询失败静默处理
@@ -448,11 +508,19 @@ function toggleAssetFiles(asset: AssetListItem) {
 }
 
 async function loadProcessingData(sessionId: number) {
-  try { availablePipelines.value = await fetchAvailablePipelines(sessionId); } catch { availablePipelines.value = []; }
+  try {
+    availablePipelines.value = (await fetchAvailablePipelines(sessionId))
+      .sort((a, b) => (pipelineOrder[a.pipelineId] ?? 99) - (pipelineOrder[b.pipelineId] ?? 99));
+  } catch { availablePipelines.value = []; }
   try { sessionJobs.value = await fetchSessionJobs(sessionId); } catch { sessionJobs.value = []; }
   const sid = detail.value?.session?.sessionId;
   if (sid) {
-    try { playbackReady.value = await checkSessionPlayback(sid); } catch { playbackReady.value = false; }
+    try {
+      playbackReady.value = await checkSessionPlayback(
+        sid,
+        latestG1PlaybackJobId.value ?? undefined,
+      );
+    } catch { playbackReady.value = false; }
   }
 }
 
@@ -524,31 +592,88 @@ function jobStatusBadgeClass(status: string): string {
   return map[status] ?? "light2-badge-neutral";
 }
 
-/** 阻塞原因文字颜色 */
-function blockedReasonColor(p: PipelineDefinitionResponse): string {
-  if (p.isReady) return "var(--color-text-tertiary)";
-  if (p.latestJobStatus === "SUCCESS") return "var(--color-success, #0d9444)";
-  if (p.latestJobStatus && ["CREATED", "CLAIMED", "RUNNING"].includes(p.latestJobStatus)) return "var(--color-warning, #d97706)";
-  return "var(--color-danger, #d92d20)";
+/** 可用处理行的视觉状态，提示与操作按钮分离，避免长文本挤压按钮。 */
+function pipelineStateClass(p: PipelineDefinitionResponse): string {
+  const status = pipelineLatestStatus(p);
+  if (executingPipelineId.value === p.pipelineId) return "is-running";
+  if (status && ["CREATED", "CLAIMED", "RUNNING"].includes(status)) return "is-running";
+  if (status === "SUCCESS") return "is-complete";
+  if (canExecutePipeline(p)) return "is-ready";
+  return "is-blocked";
 }
 
-/** Pipeline 按钮 CSS class */
-function pipelineButtonClass(p: PipelineDefinitionResponse): string {
-  if (!p.isReady) return "light2-btn-sec";
-  return "light2-btn-primary";
+function pipelineStateTitle(p: PipelineDefinitionResponse): string {
+  const status = pipelineLatestStatus(p);
+  if (executingPipelineId.value === p.pipelineId) return "正在提交任务";
+  if (status === "SUCCESS") return "上次处理已完成";
+  if (status === "CREATED") return "等待 Worker 领取";
+  if (status === "CLAIMED" || status === "RUNNING") return "处理任务进行中";
+  if (canExecutePipeline(p)) return status === "FAILED" ? "可重新提交" : "已满足处理条件";
+  if (p.blockedReason?.includes("输入文件")) return "输入数据不完整";
+  if (p.blockedReason?.includes("未注册")) return "Worker 尚未就绪";
+  return "暂不可提交";
 }
 
-/** Pipeline 按钮文案 */
-function pipelineButtonText(p: PipelineDefinitionResponse): string {
-  if (executingPipelineId.value === p.pipelineId) return "提交中...";
-  if (p.isReady) return "提交处理任务";
-  // isReady === false 的各种原因
-  if (p.latestJobStatus === "SUCCESS") return "需先清除产物";
-  if (p.latestJobStatus === "RUNNING" || p.latestJobStatus === "CLAIMED") return "处理中...";
-  if (p.latestJobStatus === "CREATED") return "等待 Worker 领取...";
-  if (p.blockedReason?.includes("输入文件")) return "缺少输入";
-  if (p.blockedReason?.includes("未注册")) return "Worker 未就绪";
-  return "不可提交";
+function pipelineStateDetail(p: PipelineDefinitionResponse): string {
+  const status = pipelineLatestStatus(p);
+  if (executingPipelineId.value === p.pipelineId) return "正在创建处理任务，请稍候…";
+  if (status === "SUCCESS") {
+    return authStore.isAdmin.value
+      ? "清除上次产物后，即可再次执行该处理。"
+      : "如需再次执行，请联系管理员清除上次产物。";
+  }
+  if (status === "CREATED") return "任务已进入队列，状态将自动更新。";
+  if (status === "CLAIMED" || status === "RUNNING") return "完成后状态与产物会自动更新，无需重复提交。";
+  if (canExecutePipeline(p)) {
+    return status === "FAILED"
+      ? "上次任务未成功，可修正问题后再次执行。"
+      : "输入文件与执行环境均已就绪。";
+  }
+  return p.blockedReason || "当前条件不满足，请检查输入与 Worker 状态。";
+}
+
+function pipelineActionText(p: PipelineDefinitionResponse): string {
+  const status = pipelineLatestStatus(p);
+  if (executingPipelineId.value === p.pipelineId) return "提交中…";
+  if (status === "CREATED") return "等待领取";
+  if (status === "CLAIMED" || status === "RUNNING") return "处理中";
+  if (status === "SUCCESS") return "等待清理";
+  if (canExecutePipeline(p)) return "提交处理任务";
+  return "暂不可提交";
+}
+
+function latestJobForPipeline(p: PipelineDefinitionResponse) {
+  return [...sessionJobs.value]
+    .filter(job => job.pipelineId === p.pipelineId)
+    .sort((left, right) => latestTime(right.updatedAt, right.createdAt).localeCompare(latestTime(left.updatedAt, left.createdAt)))[0];
+}
+
+function pipelineLatestStatus(p: PipelineDefinitionResponse): string | null {
+  return latestJobForPipeline(p)?.status ?? p.latestJobStatus ?? null;
+}
+
+function canExecutePipeline(p: PipelineDefinitionResponse): boolean {
+  const status = pipelineLatestStatus(p);
+  return Boolean(p.isReady)
+    && status !== "SUCCESS"
+    && !["CREATED", "CLAIMED", "RUNNING"].includes(status ?? "");
+}
+
+function latestSuccessfulJobForPipeline(p: PipelineDefinitionResponse) {
+  return [...sessionJobs.value]
+    .filter(job => job.pipelineId === p.pipelineId && job.status === "SUCCESS")
+    .sort((left, right) => latestTime(right.updatedAt, right.createdAt).localeCompare(latestTime(left.updatedAt, left.createdAt)))[0];
+}
+
+function canCleanupPipeline(p: PipelineDefinitionResponse): boolean {
+  return pipelineLatestStatus(p) === "SUCCESS"
+    && authStore.isAdmin.value
+    && Boolean(latestSuccessfulJobForPipeline(p));
+}
+
+function cleanupPipelineOutputs(p: PipelineDefinitionResponse) {
+  const job = latestSuccessfulJobForPipeline(p);
+  if (job) openDeleteJobDialog(job.id, p.pipelineId);
 }
 
 const FAILURE_STATUSES = new Set(["FAILED", "ERROR", "QC_FAILED", "WARNING", "QC_WARNING"]);
@@ -929,3 +1054,257 @@ onUnmounted(() => {
   stopPolling();
 });
 </script>
+
+<style scoped>
+.processing-rule-list {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.processing-rule-row {
+  --processing-state-accent: var(--color-brand-500);
+  --processing-state-bg: var(--color-brand-50);
+  --processing-state-border: var(--color-brand-100);
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) minmax(250px, 0.9fr) auto;
+  align-items: center;
+  gap: 18px;
+  min-height: 88px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 12px;
+  background: var(--color-surface-card);
+  box-shadow: 0 1px 2px rgba(31, 35, 40, 0.04);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.processing-rule-row:hover {
+  border-color: var(--color-border-default);
+  box-shadow: 0 4px 12px rgba(31, 35, 40, 0.06);
+  transform: translateY(-1px);
+}
+
+.processing-rule-row.is-complete {
+  --processing-state-accent: var(--color-success-700);
+  --processing-state-bg: #f2fbf5;
+  --processing-state-border: #ccebd6;
+}
+
+.processing-rule-row.is-running {
+  --processing-state-accent: var(--color-warning-700);
+  --processing-state-bg: #fffbeb;
+  --processing-state-border: #f7e5a3;
+}
+
+.processing-rule-row.is-blocked {
+  --processing-state-accent: var(--color-danger-700);
+  --processing-state-bg: #fff7f6;
+  --processing-state-border: #f5d0cc;
+}
+
+.processing-rule-identity,
+.processing-rule-state-copy {
+  min-width: 0;
+}
+
+.processing-rule-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.processing-rule-code {
+  overflow: hidden;
+  color: var(--color-brand-600);
+  font-family: "JetBrains Mono", "Cascadia Code", monospace;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.processing-rule-separator {
+  width: 3px;
+  height: 3px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--color-border-strong);
+}
+
+.processing-rule-name {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.processing-rule-state {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--processing-state-border);
+  border-radius: 10px;
+  background: var(--processing-state-bg);
+}
+
+.processing-rule-state-mark,
+.processing-feedback-mark {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  margin-top: 4px;
+  border: 2px solid var(--color-surface-card);
+  border-radius: 50%;
+  background: var(--processing-state-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--processing-state-accent) 20%, transparent);
+}
+
+.processing-rule-row.is-running .processing-rule-state-mark {
+  animation: processing-pulse 1.8s ease-out infinite;
+}
+
+.processing-rule-state-title {
+  color: var(--processing-state-accent);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.processing-rule-state-detail {
+  margin-top: 2px;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.processing-rule-action {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 112px;
+}
+
+.processing-rule-action .light2-btn {
+  justify-content: center;
+  min-width: 108px;
+}
+
+.processing-rule-cleanup-btn {
+  border-color: #efc4bf;
+  background: #fff;
+  color: var(--color-danger-700);
+}
+
+.processing-rule-cleanup-btn:hover {
+  border-color: #dfa29b;
+  background: #fff7f6;
+}
+
+.processing-feedback {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 12px 12px;
+  padding: 10px 12px;
+  border: 1px solid;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.processing-feedback-success {
+  --processing-state-accent: var(--color-success-700);
+  border-color: #ccebd6;
+  background: #f2fbf5;
+  color: var(--color-success-700);
+}
+
+.processing-feedback-error {
+  --processing-state-accent: var(--color-danger-700);
+  border-color: #f5d0cc;
+  background: #fff7f6;
+  color: var(--color-danger-700);
+}
+
+.processing-feedback-mark {
+  margin-top: 0;
+}
+
+.processing-feedback-link {
+  margin-left: auto;
+  color: currentColor;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.processing-feedback-link:hover {
+  text-decoration: underline;
+}
+
+@keyframes processing-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--processing-state-accent) 32%, transparent); }
+  70%, 100% { box-shadow: 0 0 0 6px transparent; }
+}
+
+@media (max-width: 1199px) {
+  .processing-rule-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px 16px;
+  }
+
+  .processing-rule-state {
+    grid-column: 1;
+  }
+
+  .processing-rule-action {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+
+@media (max-width: 680px) {
+  .processing-rule-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .processing-rule-state,
+  .processing-rule-action {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .processing-rule-action,
+  .processing-rule-action .light2-btn {
+    width: 100%;
+  }
+
+  .processing-feedback {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .processing-feedback-link {
+    width: 100%;
+    margin-left: 17px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .processing-rule-row,
+  .processing-rule-state-mark {
+    animation: none;
+    transition: none;
+  }
+}
+</style>

@@ -368,7 +368,9 @@ onMounted(async () => {
   const sid = route.params.sessionId as string;
   if (!sid) { loading.value = false; return; }
   try {
-    data.value = await fetchSessionPlayback(sid);
+    const parsedJobId = Number(route.query.jobId);
+    const jobId = Number.isInteger(parsedJobId) && parsedJobId > 0 ? parsedJobId : undefined;
+    data.value = await fetchSessionPlayback(sid, jobId);
     console.log("[Playback] API response:", JSON.stringify(data.value?.sources, null, 2));
     if (!data.value || !Object.keys(data.value.sources).length) {
       apiError.value = "此 Session 无可播放内容，请先执行处理任务生成可播放数据。";

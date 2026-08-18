@@ -48,6 +48,7 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 @Service
@@ -192,7 +193,7 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
         return processingJobMapper.selectList(
                         new LambdaQueryWrapper<ProcessingJob>()
                                 .eq(ProcessingJob::getTaskId, taskId)
-                                .orderByDesc(ProcessingJob::getCreatedAt))
+                                .orderByDesc(ProcessingJob::getId))
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -393,7 +394,7 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
         return processingJobMapper.selectList(
                         new LambdaQueryWrapper<ProcessingJob>()
                                 .eq(ProcessingJob::getSessionId, sessionId)
-                                .orderByDesc(ProcessingJob::getCreatedAt))
+                                .orderByDesc(ProcessingJob::getId))
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -403,7 +404,7 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
     public List<ProcessingJobResponse> listAllJobs() {
         return processingJobMapper.selectList(
                         new LambdaQueryWrapper<ProcessingJob>()
-                                .orderByDesc(ProcessingJob::getCreatedAt)
+                                .orderByDesc(ProcessingJob::getId)
                                 .last("LIMIT 50"))
                 .stream()
                 .map(this::toResponse)
@@ -412,8 +413,19 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
 
     @Override
     @Transactional
-    public WorkerClaimResponse claimJob(String workerType) {
+    public WorkerClaimResponse claimJob(String workerType, List<String> pipelineIds) {
         String wt = (workerType == null || workerType.isBlank()) ? "CPU" : workerType.strip().toUpperCase();
+        java.util.Set<String> supportedPipelineIds = pipelineIds == null
+                ? java.util.Set.of()
+                : pipelineIds.stream()
+                        .filter(java.util.Objects::nonNull)
+                        .map(String::strip)
+                        .map(String::toUpperCase)
+                        .collect(java.util.stream.Collectors.toSet());
+        if (supportedPipelineIds.isEmpty()) {
+            log.warn("[Worker] claimJob(workerType={}): Worker 未上报支持的 Pipeline，跳过领取", wt);
+            return null;
+        }
         // 获取所有 CREATED+PYTHON_WORKER 作业，按创建时间升序
         List<ProcessingJob> candidates = processingJobMapper.selectList(
                 new LambdaQueryWrapper<ProcessingJob>()
@@ -423,22 +435,25 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
         if (!candidates.isEmpty()) {
             log.info("[Worker] claimJob(workerType={}) — 当前CREATED+PYTHON_WORKER作业数: {}", wt, candidates.size());
         }
-        // 遍历找到第一个属于该 workerType 的 Pipeline Job（ALL 模式不过滤）
+        // 遍历找到当前 Worker 明确支持，且 workerType 匹配的第一个 Job
         ProcessingJob job = null;
-        if ("ALL".equals(wt)) {
-            // 本地开发模式：领取任意 CREATED Job，不限制 Pipeline 类型
-            job = candidates.isEmpty() ? null : candidates.get(0);
-        } else {
-            for (ProcessingJob candidate : candidates) {
-                PipelineDefinition def = pipelineDefMapper.selectOne(
-                        new LambdaQueryWrapper<PipelineDefinition>()
-                                .eq(PipelineDefinition::getPipelineId, candidate.getPipelineId()));
-                String jobWorkerType = (def != null && def.getWorkerType() != null)
-                        ? def.getWorkerType().strip().toUpperCase() : "CPU";
-                if (wt.equals(jobWorkerType)) {
-                    job = candidate;
-                    break;
-                }
+        for (ProcessingJob candidate : candidates) {
+            String candidatePipelineId = candidate.getPipelineId().strip().toUpperCase();
+            if (!supportedPipelineIds.contains(candidatePipelineId)) {
+                continue;
+            }
+            if ("ALL".equals(wt)) {
+                job = candidate;
+                break;
+            }
+            PipelineDefinition def = pipelineDefMapper.selectOne(
+                    new LambdaQueryWrapper<PipelineDefinition>()
+                            .eq(PipelineDefinition::getPipelineId, candidate.getPipelineId()));
+            String jobWorkerType = (def != null && def.getWorkerType() != null)
+                    ? def.getWorkerType().strip().toUpperCase() : "CPU";
+            if (wt.equals(jobWorkerType)) {
+                job = candidate;
+                break;
             }
         }
         if (job == null) {
@@ -447,7 +462,7 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
                 List<String> types = candidates.stream()
                         .map(c -> c.getPipelineId() + "(" + c.getStatus() + ")")
                         .toList();
-                log.info("[Worker] claimJob(workerType={}): 无匹配的 CREATED 作业，候选作业(不同workerType): {}",
+                log.info("[Worker] claimJob(workerType={}): 无当前 Worker 可执行的 CREATED 作业，候选作业: {}",
                         wt, types);
             }
             return null;
@@ -516,8 +531,16 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
         log.info("[Worker] 作业上报成功: jobId={}, pipelineId={}, 产物数={}",
                 jobId, job.getPipelineId(), request.outputFiles().size());
 
-        // 获取 session 已有的输入资产（用于血缘追踪）
-        List<DataAsset> inputAssets = dataAssetService.listByTaskId(job.getTaskId());
+        // 只记录当前 Pipeline 实际消费的 Session 资产，避免分支 Pipeline 之间产生错误血缘
+        PipelineDefinition pipelineDef = pipelineDefMapper.selectOne(
+                new LambdaQueryWrapper<PipelineDefinition>()
+                        .eq(PipelineDefinition::getPipelineId, job.getPipelineId()));
+        List<String> inputAssetTypes = parseInputAssetTypes(
+                pipelineDef != null ? pipelineDef.getInputAssetTypes() : null);
+        List<DataAsset> inputAssets = dataAssetService.listByTaskId(job.getTaskId()).stream()
+                .filter(asset -> Objects.equals(asset.getSessionId(), job.getSessionId()))
+                .filter(asset -> inputAssetTypes.isEmpty() || inputAssetTypes.contains(asset.getAssetType()))
+                .toList();
 
         for (WorkerSuccessRequest.OutputFile output : request.outputFiles()) {
             // 创建 DataFile
@@ -549,7 +572,7 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
             outputAsset.setProducedByJobId(job.getId());
             dataAssetMapper.updateById(outputAsset);
 
-            // 创建血缘：所有输入资产 → 此输出资产
+            // 创建血缘：实际输入资产 → 此输出资产
             for (DataAsset input : inputAssets) {
                 AssetLineage lineage = new AssetLineage();
                 lineage.setTaskId(job.getTaskId());

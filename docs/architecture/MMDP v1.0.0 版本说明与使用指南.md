@@ -1,0 +1,383 @@
+# MMDP v1.0.0 版本说明与使用指南
+> 发布日期：2026-08-05  
+发布标签：`v1.0.0`  
+版本主题：CPU/GPU Worker 分工与 GPU 生产部署
+>
+
+
+
+[http://8.154.36.87/home](http://8.154.36.87/home)
+
+## 一、版本概述
+MMDP v1.0.0 已形成从多模态数据接入、Session 管理、资产管理、质量检查、数据处理、动作标注到结果回放与血缘追踪的核心闭环。
+
+本版本最重要的更新是 **GPU Worker 正式接入生产处理链路**。平台不再由单一 Worker 承担全部任务，而是根据 Pipeline 的 `worker_type` 将作业分配给 CPU Worker 或 GPU Worker：常规转码、对齐、质检和格式转换由 CPU Worker 执行，需要 CUDA、ZED SDK 或 GPU 加速的任务由 GPU Worker 执行。
+
+这次更新的意义不只是“增加一台 GPU 服务器”，而是完成了异构算力从代码、依赖、镜像、调度到生产运维的完整落地。GPU Worker 的部署涉及 NVIDIA Driver 与 Container Toolkit、CUDA 13、ZED SDK 5.4.1、pyzed、PyTorch CUDA 13、SMPL-H 模型、双 ECS 私网通信和 Docker 构建缓存等多个环节。首次 GPU 镜像构建耗时约 90 分钟，镜像磁盘占用约 22.1 GB；最终还解决了 `libnvcuvid.so.1` 驱动能力挂载、CUDA 专用 wheel 下载、CPU/GPU 依赖冲突和 ZED 首次模型优化等问题。
+
+因此，**GPU Worker 是 v1.0.0 的核心里程碑，也是本版本投入最大、部署复杂度最高的部分**。它使 G1 相机与机器人数据合并、动作物理指标 V2 等计算密集型 Pipeline 能够进入平台的正式任务链路。
+
+## 二、版本迭代全景
+MMDP 从 v0.1.0 到 v1.0.0 共经历 10 个发布版本。整个演进过程不是功能堆叠，而是沿着“平台骨架 → 数据闭环 → 处理闭环 → 异构算力生产化”逐步完成。
+
+| 版本 | 发布日期 | 版本主题 | 核心成果 |
+| --- | --- | --- | --- |
+| `v0.1.0` | 2026-05-18 | MVP1 / Monorepo 初始基线 | 建立 Vue 前端、Spring Boot 后端的单体仓库和多模态数据平台基础骨架。 |
+| `v0.2.0` | 2026-05-25 | MVP2 / 数据管理界面 | 完成 MinIO 风格数据管理界面与 AIOU 面板，形成平台化的信息展示框架。 |
+| `v0.3.0` | 2026-05-27 | Session 采集与回放 | 引入 Collection Session、采集端原型、数据回放页面及配套数据库结构。 |
+| `v0.4.0` | 2026-06-04 | 部署与 OSS 直传 | 建立 Docker Compose、Nginx、Backend 和 Worker 部署链路，支持浏览器直传 OSS。 |
+| `v0.5.0` | 2026-06-06 | 文件夹 Session 导入 | 完成目录级 Session 导入与 finalize 流程，将采集文件转为平台内的 Session、DataFile 和 DataAsset。 |
+| `v0.6.0` | 2026-06-16 | 认证与 ZED 导入 | 增加登录、角色权限和管理员用户管理，完善 ZED + IMU 数据导入能力。 |
+| `v0.7.0` | 2026-06-17 | Profile、Pipeline 与 Worker | 建立 Profile 驱动配置、Pipeline 定义、Python Worker 和 ProcessingJob 的端到端处理闭环。 |
+| `v0.8.0` | 2026-07-02 | 动作数据与 3D Viewer | 接入 SMPL 动作数据、Three.js 3D 动作查看器和数据处理执行图。 |
+| `v0.9.0` | 2026-07-18 | Motion、G1 与 ZED 处理 | 扩展动作指标、G1 机器人数据和 ZED 数据处理能力，补强 Pipeline 作业可靠性。 |
+| `v1.0.0` | **2026-08-05** | **CPU/GPU Worker 生产化** | **完成 CPU/GPU 作业隔离、GPU Worker、CUDA/ZED 镜像、双 ECS 部署和生产验收，平台进入完整可部署阶段。** |
+
+
+### 2.1 演进阶段
+| 阶段 | 版本范围 | 形成的能力 |
+| --- | --- | --- |
+| 平台骨架 | v0.1.0–v0.3.0 | 前后端基础、数据管理界面、Session 采集与回放。 |
+| 数据闭环 | v0.4.0–v0.6.0 | OSS 接入、目录导入、认证权限和 ZED + IMU 数据进入平台。 |
+| 处理闭环 | v0.7.0–v0.9.0 | Profile、Pipeline、Worker、动作查看及 G1/ZED 算法处理。 |
+| 生产化里程碑 | v1.0.0 | CPU/GPU 异构 Worker、独立部署、可靠性和运维体系。 |
+
+
+## 三、v1.0.0 核心更新
+### 3.1 CPU/GPU Worker 分工
++ Pipeline 新增 `worker_type` 属性，当前支持 `CPU` 和 `GPU`。
++ CPU Worker 只注册和领取 CPU Pipeline，GPU Worker 只注册和领取 GPU Pipeline。
++ Backend 按 Worker 类型维护独立的 Pipeline 注册表和在线心跳。
++ 用户创建处理作业时，Backend 会检查目标类型的 Worker 是否在线、对应 Pipeline 是否已注册。
++ 本地开发保留 `ALL` 模式，可在环境允许时注册全部 Pipeline。
+
+### 3.2 GPU Worker 生产化
++ 新增独立的 `Dockerfile.gpu`、`requirements-gpu.txt` 和 `docker-compose.gpu.yml`。
++ GPU 镜像基于 CUDA 13 Runtime，集成 ZED SDK 5.4.1、pyzed、PyTorch 2.10.0 CUDA 13 和 SMPL-H 模型。
++ GPU Worker 独立部署在 GPU ECS，通过 VPC 私网访问 CPU ECS 上的 Backend。
++ CPU 与 GPU Worker 共用同一个 OSS Bucket，输入和产物均通过 OSS 流转。
++ GPU Compose 需要显式申请 NVIDIA GPU，并配置 ZED 解码所需的 `NVIDIA_DRIVER_CAPABILITIES=all`。
+
+### 3.3 作业链路可靠性
++ HTTP 请求和 OSS 上传、下载增加指数退避重试。
++ Pipeline ID 在前后端统一执行 `strip + uppercase` 规范化，减少配置不一致导致的任务失败。
++ 成功和失败上报支持幂等处理，避免 Worker 重试产生重复产物。
++ Backend 定时回收超过 5 分钟仍处于 `CLAIMED` 的作业，使 Worker 异常退出后的任务可以重新领取。
++ Worker 成功后清理临时目录，失败时保留现场，便于定位数据或算法问题。
+
+### 3.4 部署与运维能力
++ CPU 节点运行 Nginx、Backend、MySQL 和 CPU Worker；GPU 节点只运行 GPU Worker。
++ CPU/GPU 使用独立依赖和独立镜像，避免 `lerobot/evdev` 与 CUDA/ZED 依赖互相污染。
++ Dockerfile 将依赖层放在源码层之前，日常只修改 Pipeline 时可复用昂贵的 CUDA、ZED 和 PyTorch 缓存。
++ 已形成首次部署、增量更新、验收、回滚和按量 GPU 实例启停的完整运维记录。
+
+## 四、系统架构
+MMDP 采用前后端分离、计算节点独立部署的架构，由 Vue 3 前端、Nginx、Spring Boot Backend、MySQL、OSS、CPU Worker 和 GPU Worker 共同组成。Backend 是业务与调度中心，MySQL 保存结构化业务数据，OSS 保存原始文件和处理产物，CPU/GPU Worker 提供异步计算能力。
+
+### 4.1 总体拓扑
+```latex
+用户浏览器
+  └─ HTTP/HTTPS
+      └─ Nginx
+          ├─ 前端静态资源：Vue 3 + TypeScript + Vite
+          └─ /api 请求反向代理
+              └─ Spring Boot Backend
+                  ├─ MySQL：用户、任务、Session、资产、作业、QC、标注和血缘元数据
+                  ├─ OSS：原始文件、导入文件、处理产物和回放资源
+                  ├─ CPU Worker：常规转码、对齐、质检、格式转换和基础指标计算
+                  └─ GPU Worker：CUDA、ZED SDK、pyzed、SMPL-H 相关计算
+
+CPU Worker
+  ├─ 向 Backend 注册 CPU Pipeline 并定时发送心跳
+  ├─ 轮询领取 CPU Job
+  └─ 通过 OSS 下载输入、上传产物
+
+GPU Worker
+  ├─ 通过 VPC 私网访问 Backend
+  ├─ 向 Backend 注册 GPU Pipeline 并定时发送心跳
+  ├─ 轮询领取 GPU Job
+  └─ 通过 OSS 下载输入、上传产物
+```
+
+### 4.2 逻辑分层
+| 层级 | 组成 | 主要职责 |
+| --- | --- | --- |
+| 访问层 | 浏览器、Nginx | 提供统一访问入口、前端静态资源和 `/api` 反向代理。 |
+| 表现层 | Vue 3、TypeScript、Pinia、Vue Router、Three.js | 提供登录、任务、Session、资产、处理、QC、标注、回放、3D 查看和管理界面。 |
+| 业务层 | Spring Boot 3 | 承担认证授权、业务校验、状态管理、Worker 注册、作业调度和统一 API。 |
+| 持久化层 | MyBatis-Plus、MySQL | 保存业务对象、配置、作业状态、报告、标注及血缘关系。 |
+| 文件存储层 | Alibaba Cloud OSS | 保存大体积原始数据、Session 文件、处理输入和 Pipeline 输出产物。 |
+| 计算层 | Python CPU Worker、GPU Worker | 自动发现 Pipeline，执行异步数据处理并向 Backend 上报结果。 |
+| 运维层 | Docker、Docker Compose、Nginx、NVIDIA Container Toolkit | 管理 CPU/GPU 服务部署、网络、GPU 设备挂载、更新和回滚。 |
+
+
+### 4.3 Backend 业务架构
+Backend 按业务领域组织模块，统一遵循 `Controller → Service → ServiceImpl → Mapper → MySQL` 的调用结构。
+
+| 领域 | 核心职责 |
+| --- | --- |
+| Auth / User | Session 登录认证、当前用户、角色权限和管理员用户管理。 |
+| Task | 管理采集任务，作为 Session、资产和处理流程的顶层业务容器。 |
+| Profile | 定义采集数据源、`sourceKey`、资产解析方式、播放规则和可用 Pipeline。 |
+| Session / SessionImport | 管理采集会话，解析 Manifest，校验目录结构并完成文件归档。 |
+| File / Storage | 管理文件元数据、OSS 直传、下载和存储路由。 |
+| Asset | 统一管理原始资产、外部资产、导入资产和 Pipeline 派生产物。 |
+| Pipeline | 管理 Pipeline 定义、输入输出资产类型、启停状态和 `worker_type`。 |
+| Processing | 创建 ProcessingJob、校验 Worker 可用性、分配作业并登记处理结果。 |
+| QC | 执行文件级质量检查并保存结构化 QC 报告。 |
+| Annotation | 保存动作质量评级、标签、帧级问题、缺陷和文本描述。 |
+| Lineage | 建立输入资产、处理作业和输出资产之间的可追踪关系。 |
+| Admin | 提供用户管理以及 Task、Session、Job 产物的受控清理能力。 |
+
+
+### 4.4 核心领域对象
+```latex
+CollectionProfile
+  ├─ 定义 CollectionProfileSource
+  └─ 绑定可用 PipelineDefinition
+
+AcquisitionTask
+  └─ CollectionSession
+      ├─ DataFile
+      ├─ DataAsset
+      ├─ QcReport
+      ├─ MotionAnnotation
+      └─ ProcessingJob
+          ├─ 输入：DataAsset / DataFile
+          ├─ 执行：PipelineDefinition
+          ├─ 输出：Derived DataFile / DataAsset
+          └─ 关系：AssetLineage
+```
+
++ `AcquisitionTask` 是一次数据采集或数据生产任务的顶层容器。
++ `CollectionSession` 表示一次具体采集会话，是回放、处理和标注的主要操作单位。
++ `DataFile` 描述实际存储文件，包含 OSS Bucket、ObjectKey、文件大小和类型等信息。
++ `DataAsset` 是平台统一的数据对象，可对应上传文件、外部路径、导入数据或处理产物。
++ `PipelineDefinition` 描述处理规则、输入输出资产类型、执行器和 CPU/GPU Worker 类型。
++ `ProcessingJob` 记录一次处理执行及其状态、参数、结果和错误信息。
++ `AssetLineage` 连接输入资产、ProcessingJob 与输出资产，形成可视化数据血缘。
+
+### 4.5 CPU/GPU Worker 调度架构
+1. Worker 启动时扫描 `pipelines/`，发现 `BasePipeline` 子类。
+2. Worker 根据 `MMDP_WORKER_TYPE` 只加载 `CPU`、`GPU` 或 `ALL` 类型的 Pipeline。
+3. Worker 向 Backend 注册 Pipeline 清单，并每 60 秒发送一次注册心跳。
+4. Backend 按 `worker_type` 分区维护 CPU/GPU Pipeline 注册表和在线时间。
+5. 用户创建 ProcessingJob 时，Backend 校验 Pipeline 已启用、输入资产存在、目标 Worker 在线且已注册该 Pipeline。
+6. CPU/GPU Worker 分别轮询 `/api/worker/jobs/claim`，Backend 只返回与其类型匹配的最早待处理作业。
+7. Worker 从 OSS 下载输入文件到本地临时目录，执行 Pipeline，再将产物上传到 OSS。
+8. Worker 上报成功后，Backend 创建输出 DataFile、DataAsset 和 AssetLineage；上报失败时记录错误信息。
+9. 成功作业清理本地临时目录，失败作业保留现场；超时停留在 `CLAIMED` 的作业会被回收为 `CREATED`，等待重新领取。
+
+该架构当前使用 HTTP 轮询而非消息队列。它保持了部署和故障排查的简单性，同时已经满足 CPU/GPU 作业隔离和现阶段的处理吞吐需求。
+
+### 4.6 数据与文件流
+```latex
+数据接入
+  → 浏览器直传 OSS，或由 Backend 接收并写入 OSS
+  → Backend 创建 Task、Session、DataFile 和 DataAsset
+  → QC 模块生成文件级检查报告
+
+数据处理
+  → 用户为 Session 选择 Pipeline
+  → Backend 创建 ProcessingJob
+  → 对应类型的 CPU/GPU Worker 领取作业
+  → Worker 从 OSS 下载输入并执行 Pipeline
+  → Worker 将产物上传 OSS 并上报 Backend
+  → Backend 登记派生文件、资产和血缘关系
+
+数据使用
+  → 前端查询 Session、资产、QC、标注和处理状态
+  → 视频与 IMU 进入同步回放
+  → SMPL 数据进入 3D 动作查看
+  → 输入、作业和输出通过 DAG 展示完整数据链路
+```
+
+### 4.7 生产部署架构
+| 节点 | 部署服务 | 说明 |
+| --- | --- | --- |
+| CPU ECS | Nginx、Frontend、Backend、MySQL、CPU Worker | 平台常驻主节点，承载访问入口、业务服务、数据库和常规处理任务。 |
+| GPU ECS | GPU Worker | 按需启动的计算节点，通过 VPC 私网访问 Backend，不承载用户入口和业务数据库。 |
+| OSS | 原始文件与处理产物 | CPU/GPU 节点共享同一 Bucket，避免大文件经过 Backend 或在节点之间直接复制。 |
+
+
+CPU 与 GPU 节点使用独立的 Dockerfile、requirements 和 Compose 文件。CPU 镜像包含 LeRobot 等常规处理依赖；GPU 镜像包含 CUDA、ZED SDK、pyzed、CUDA 版 PyTorch 和 SMPL-H 模型。两类 Worker 共用处理协议和 Pipeline 基类，但运行环境与作业队列按类型隔离。
+
+### 4.8 安全与可靠性边界
++ 普通 `/api/**` 请求由 `AuthInterceptor` 执行 Session 认证，管理接口额外校验管理员角色。
++ `/api/worker/**` 用于 Worker 注册、领取和上报，应作为内部服务接口控制访问范围。
++ 数据库密码、OSS AccessKey 和证书私钥均通过环境变量或服务器文件注入，不写入代码和部署包。
++ 浏览器 OSS 直传使用临时授权，Backend 在完成接口中校验对象是否真实存在。
++ Worker 的 HTTP 与 OSS 操作带重试，成功/失败上报保持幂等，超时作业支持自动回收。
++ CPU/GPU 节点使用独立镜像与部署文件，单个计算节点异常不会影响 Backend、数据库和另一类 Worker 的运行。
+
+## 五、当前功能介绍
+| 模块 | 当前能力 |
+| --- | --- |
+| 用户与权限 | Session 登录认证；支持 ADMIN、COLLECTOR、ANNOTATOR、VIEWER 角色；管理员可维护用户和启停状态。 |
+| 采集任务 | 创建、分页查询和筛选采集任务；以 Task 统一承载 Session、资产、处理作业和数据链路。 |
+| Profile | 管理采集 Profile、数据源 `sourceKey`、资产类型、播放方式和可用 Pipeline。 |
+| 数据接入 | 支持文件上传、OSS 直传、目录/Manifest 导入、外部资产登记和 ZED + IMU Session 导入。 |
+| Session | 查询 Session 列表与详情，查看文件、资产、QC、处理作业和标注进度。 |
+| 数据资产 | 统一管理原始文件、导入资产、外部资产和处理产物，并记录来源与派生关系。 |
+| 数据回放 | 支持视频与 IMU 数据回放、播放条件检查、双目数据查看和布局切换。 |
+| 3D 动作查看 | 将 SMPL 数据转换为前端可加载的查看数据，并通过 Three.js 展示动作。 |
+| Pipeline | 管理 Pipeline 定义、输入/输出资产类型、启停状态、Profile 绑定和 CPU/GPU 类型。 |
+| 处理作业 | 创建 Session 处理作业，查看状态和错误信息；支持自动 Worker、人工处理登记和产物血缘。 |
+| Worker | 自动发现 Pipeline，轮询领取作业，从 OSS 下载输入，执行处理，上传产物并上报成功或失败。 |
+| 质量检查 | 对 CSV、TXT、JSON、图片、HDF5、WAV、NPZ、MP4 等文件执行格式和内容基础检查并生成报告。 |
+| 动作标注 | 支持按动作资产保存质量评级、动作标签、帧级问题、MotionDB 风格缺陷和文本描述，并统计 Session/Task 标注进度。 |
+| 数据链路 | 以 DAG 查看输入资产、ProcessingJob 和派生产物之间的血缘关系。 |
+| 管理运维 | 管理员可清理作业产物、Session 和 Task；生产环境提供 CPU/GPU 独立部署与回滚流程。 |
+
+
+## 六、CPU/GPU Pipeline 清单
+v1.0.0 当前注册 10 个 Pipeline，其中 8 个由 CPU Worker 执行，2 个由 GPU Worker 执行。
+
+| Worker | Pipeline ID | 功能 | 输入 → 输出 |
+| --- | --- | --- | --- |
+| CPU | `BUILD_LOOPED_PLAYBACK` | 生成循环播放 MP4 | 图像序列 → `RGB_VIDEO_MP4` |
+| CPU | `BUILD_MOTION_VIEWER_DATA` | 生成 3D 动作查看数据 | `SMPL_NPZ` → `MOTION_VIEWER_JSON` |
+| CPU | `BUILD_PLAYBACK` | 将图像序列合成为 MP4 | 图像序列 → `RGB_VIDEO_MP4` |
+| CPU | `BUILD_PLAYBACK_BUNDLE` | 执行播放包完整性检查 | 视频、对齐 IMU、对齐报告 → `QC_SUMMARY` |
+| CPU | `BUILD_STEREO_MP4` | 将左右双目帧分别合成为视频 | 左右图像序列 → `RGB_VIDEO_MP4` |
+| CPU | `G1_CONVERT_TO_LEROBOT` | 转换为 LeRobot 训练格式 | `G1_MERGED_HDF5` → `G1_LEROBOT_PARQUET` |
+| CPU | `MOTION_PHYSICS_METRICS` | 计算基础动作物理指标 | `SMPL_NPZ` → `PHYSICS_REPORT` |
+| CPU | `STEREO_IMU_ALIGN` | 对齐双目图像、帧时间戳和 IMU | 双目序列、IMU、时间戳 → 对齐数据与报告 |
+| **GPU** | `G1_MERGE_CAMERA_ROBOT` | **合并 ZED SVO2 与 G1 机器人 HDF5 数据** | `G1_CAMERA_SVO2` + `G1_ROBOT_HDF5` → `G1_MERGED_HDF5` |
+| **GPU** | `MOTION_PHYSICS_METRICS_V2` | **使用 CUDA 与 SMPL-H 计算动作物理指标 V2** | `SMPL_NPZ` → `PHYSICS_REPORT_V2` |
+
+
+## 七、平台使用说明
+### 7.1 典型使用流程
+1. 使用平台账号登录。
+2. 管理员在“Profile 管理”中确认采集类型、数据源和可用 Pipeline。
+3. 在“任务”中创建采集任务，或通过“数据资产接入”导入已有 Session。
+4. 在 Session 详情页确认原始文件、资产类型和基础 QC 结果。
+5. 需要查看数据时，进入“数据回放”或“3D 动作查看”。
+6. 在 Session 详情页选择可用 Pipeline 并创建处理作业。
+7. Backend 根据 Pipeline 的 `worker_type` 等待对应 CPU 或 GPU Worker 领取任务。
+8. Worker 完成处理后，平台自动登记输出文件、派生资产和 AssetLineage。
+9. 在处理记录、资产详情或数据链路 DAG 中查看结果；动作资产可继续进入标注流程。
+
+### 7.2 触发 GPU 作业前的检查
++ GPU Worker 已启动，日志显示 `Worker 类型: GPU`。
++ Backend 日志显示 GPU Worker 已注册 2 个 Pipeline。
++ 容器内 `torch.cuda.is_available()` 返回 `True`。
++ `pyzed` 可以正常导入；执行 ZED Pipeline 时已提供 `NVIDIA_DRIVER_CAPABILITIES=all`。
++ Session 中存在目标 Pipeline 要求的输入资产类型。
+
+若 GPU Worker 未在线，Backend 会拒绝创建对应作业并返回明确提示，避免任务长期停留在等待状态。
+
+## 八、本地开发启动
+### 8.1 启动 Backend
+```powershell
+cd mmdp-backend
+mvn spring-boot:run
+```
+
+Backend 默认端口为 `19021`。启动前需要准备 MySQL 与 OSS 配置。
+
+### 8.2 启动 Frontend
+```powershell
+cd mmdp-frontend
+npm install
+npm run dev
+```
+
+Frontend 默认端口为 `5173`，开发环境中的 `/api` 请求代理到 Backend。
+
+### 8.3 启动 CPU Worker
+```powershell
+cd mmdp-worker
+pip install -r requirements.txt
+$env:MMDP_WORKER_TYPE="CPU"
+python main.py --list-pipelines
+python main.py
+```
+
+Worker 至少需要配置：
+
++ `MMDP_BACKEND_URL`
++ `MMDP_OSS_ENDPOINT`
++ `MMDP_OSS_ACCESS_KEY_ID`
++ `MMDP_OSS_ACCESS_KEY_SECRET`
++ `MMDP_OSS_BUCKET`
+
+本地同时具备 CPU/GPU 全部依赖时，可将 `MMDP_WORKER_TYPE` 设置为 `ALL`；普通开发优先使用 `CPU`，减少无关的 CUDA 和 pyzed 环境要求。
+
+### 8.4 推荐启动顺序
+```latex
+MySQL / OSS → Backend → CPU Worker / GPU Worker → Frontend
+```
+
+Worker 会在启动时注册 Pipeline，并每 60 秒重新注册一次。Backend 重启后无需重启 Worker，下一次心跳会恢复注册表。
+
+## 九、生产部署说明
+### 9.1 CPU 节点
+CPU 节点通过 `deploy/docker-compose.yml` 运行：
+
++ MySQL
++ Spring Boot Backend
++ CPU Worker
++ Nginx 与前端静态资源
+
+```bash
+cd /data/mmdp/deploy
+docker compose config
+docker compose up -d
+docker compose ps
+```
+
+### 9.2 GPU 节点
+GPU 节点通过独立 Compose 文件运行 GPU Worker：
+
+```bash
+cd /data/mmdp-gpu
+nvidia-smi
+docker run --rm --gpus all nvidia/cuda:13.0.0-runtime-ubuntu22.04 nvidia-smi
+docker compose -f docker-compose.gpu.yml build mmdp-worker-gpu
+docker compose -f docker-compose.gpu.yml up -d --no-build mmdp-worker-gpu
+docker logs --tail 100 mmdp-worker-gpu
+```
+
+GPU Worker 通过环境变量连接 Backend 与 OSS。生产 `.env`、OSS 凭证、数据库数据和证书私钥不得进入部署包或 Git 仓库。
+
+> **重要运维注意：** 首次生产部署包含 GPU ECS 现场修复。再次从仓库构建或覆盖 GPU 节点前，必须按[生产运维记录](../deployment/CPU与GPU生产部署及后续更新运维记录.md)回收并核对最终有效的 `Dockerfile.gpu` 与 `docker-compose.gpu.yml`，尤其是 pyzed 安装方式和 `NVIDIA_DRIVER_CAPABILITIES=all`。未经比较不要直接覆盖生产文件。
+>
+
+### 9.3 从 v0.9.0 升级
+1. 备份数据库和当前镜像，并保留原有 `.env` 与 `mysql-data/`。
+2. 执行 `deploy/initdb/migration_add_worker_type.sql`，为 Pipeline 增加 `worker_type`。
+3. 更新并重启 Backend 与 CPU Worker，确认 CPU Pipeline 注册成功。
+4. 在 GPU 节点确认 NVIDIA Driver、Container Toolkit 和 CUDA 容器可用。
+5. 构建并启动 GPU Worker，确认两个 GPU Pipeline 注册成功。
+6. 分别执行一个 CPU Job 和一个 GPU Job，验证领取、执行、上传、上报和血缘登记全链路。
+
+部署时不要执行 `docker compose down -v`，不要覆盖生产 `.env` 或删除 `mysql-data/`。GPU 镜像日常构建不要使用 `--no-cache`，否则会重新下载和安装耗时很长的 CUDA、ZED 与 PyTorch 依赖。
+
+## 十、验收标准
+v1.0.0 部署完成后，应至少满足以下条件：
+
++ 前端登录页可访问，登录与角色权限正常。
++ Backend、MySQL、Nginx、CPU Worker 容器正常运行。
++ CPU Worker 注册 8 个 CPU Pipeline。
++ GPU Worker 注册 2 个 GPU Pipeline。
++ CPU Worker 不领取 GPU Job，GPU Worker 不领取 CPU Job。
++ CPU Pipeline 能完成一次“领取 → 下载 → 执行 → 上传 → 上报”。
++ `G1_MERGE_CAMERA_ROBOT` 或 `MOTION_PHYSICS_METRICS_V2` 能在 GPU 上完成一次全链路执行。
++ 处理产物能在 Session/资产页面查看，并生成正确的 AssetLineage。
++ Worker 异常退出后，超时的 `CLAIMED` 作业可以被回收并再次领取。
+
+## 十一、相关文档
++ [项目架构总览](../architecture/overview.md)
++ [Worker 架构说明](../architecture/worker.md)
++ [CPU/GPU Worker 开发、构建与部署指南](../deployment/MMDP_GPU_Worker_Deployment_Guide.md)
++ [CPU/GPU 生产部署及后续更新运维记录](../deployment/CPU与GPU生产部署及后续更新运维记录.md)
++ [GPU Worker 设计说明](../deployment/MMDP_GPU_Worker_Design.md)
++ [动作物理指标 V2 验证与部署](../processing/motion-v2-verify-deploy.md)
+
+## 十二、版本结论
+v1.0.0 的核心成果，是在已有多模态数据管理和处理闭环上，正式补齐了 GPU 计算节点。CPU/GPU Worker 已能够独立注册、按类型领取任务，并通过同一套 Backend、OSS 和资产血缘模型协作。
+
+这个版本把 GPU 能力从本地算法环境推进到了可部署、可调度、可验收、可维护的生产组件。对 MMDP 而言，这是处理能力从单一 CPU 执行走向异构算力架构的关键一步。
+
