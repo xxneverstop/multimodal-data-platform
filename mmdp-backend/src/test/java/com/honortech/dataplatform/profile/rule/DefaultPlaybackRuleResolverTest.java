@@ -14,21 +14,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class DefaultPlaybackRuleResolverTest {
 
     @Test
-    void shouldBuildG1PlaybackSourceFromGeneratedMp4() {
+    void shouldBuildGenericPlaybackSourceFromGeneratedMp4() {
         DefaultPlaybackRuleResolver resolver = new DefaultPlaybackRuleResolver();
         CollectionProfileSource source = new CollectionProfileSource();
-        source.setSourceKey("camera_svo2");
-        source.setSourceName("G1 相机回放");
+        source.setSourceKey("camera_main");
+        source.setSourceName("主相机回放");
         source.setPlaybackKind("video");
         source.setExpectedFps(20D);
 
         DataFile file = new DataFile();
         file.setId(88L);
-        file.setSourceKey("camera_svo2");
-        file.setOriginalFilename("g1_playback.mp4");
+        file.setSourceKey("camera_main");
+        file.setOriginalFilename("playback.mp4");
         file.setFileRole("PROCESSED_OUTPUT");
 
-        assertTrue(resolver.supports("G1_TELEOP_V1"));
+        assertTrue(resolver.supports("GENERIC_PROFILE_V1"));
         assertTrue(resolver.canPlay(List.of(source), List.of(file)));
 
         var sources = resolver.buildSources(
@@ -37,8 +37,8 @@ class DefaultPlaybackRuleResolverTest {
                 List.of(file),
                 new ObjectMapper().createObjectNode()
         );
-        assertEquals("video", sources.get("camera_svo2").type());
-        assertEquals("/api/files/88/download", sources.get("camera_svo2").videoUrl());
-        assertEquals(20D, sources.get("camera_svo2").fps());
+        assertEquals("video", sources.get("camera_main").type());
+        assertEquals("/api/files/88/download", sources.get("camera_main").videoUrl());
+        assertEquals(20D, sources.get("camera_main").fps());
     }
 }

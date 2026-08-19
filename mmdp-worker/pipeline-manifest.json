@@ -107,9 +107,9 @@
   },
   {
     "pipelineId": "G1_GENERATE_PLAYBACK",
-    "displayName": "G1可视化播放资产生成",
-    "description": "从合并后的G1 HDF5中提取左相机图像，生成可在线播放的MP4",
-    "version": "1.0.0",
+    "displayName": "G1 双目可视化播放资产生成",
+    "description": "从合并后的 G1 HDF5 中提取左右眼图像，生成同步的双目 MP4",
+    "version": "2.0.0",
     "inputAssetTypes": [
       "G1_MERGED_HDF5"
     ],
